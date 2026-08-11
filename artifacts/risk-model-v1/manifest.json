@@ -1,0 +1,19 @@
+{
+  "format": "flagship-model-artifact/v1",
+  "dataset": "synthetic_temporal_graph_v1",
+  "seed": 20260811,
+  "created_date": "2026-08-11",
+  "files": {
+    "riskgraph-baseline.joblib": {
+      "bytes": 993929,
+      "sha256": "dcbf90d0c4ba3f55fe4198053a40b32361b2c22eec394df7bad37a1adb12ecef",
+      "tracked": false,
+      "reproducible": true
+    },
+    "riskgraph-model-card.json": {
+      "bytes": 1426,
+      "sha256": "aebd45cd766481da265c34cd2d14c12028444e593726d9f15b9c7458bac46a75"
+    }
+  },
+  "warning": "All training and test data are synthetic. Metrics are not evidence of real-world fraud detection performance."
+}

@@ -1,21 +1,21 @@
 # Flagship Lab
 
-å››ä¸ªé¢å‘å››å¤§å®žä¹ å²—ä½çš„å¯å®¡è®¡è½¯ä»¶å·¥ç¨‹é¡¹ç›®ã€‚ç¬¬äºŒé˜¶æ®µå·²è¦†ç›– FastAPI/OpenAPIã€JWTè§’è‰²æƒé™ã€ç‰ˆæœ¬åŒ–è§„åˆ™DSLã€å¯éªŒè¯è¯æ®åŒ…ã€æ··åˆæ£€ç´¢ã€æ—¶é—´åˆ‡åˆ†é£Žé™©æ¨¡åž‹å’Œå¯é‡æ”¾æŽ§åˆ¶äº‹ä»¶æµã€‚
+四个面向四大实习岗位的可审计软件工程项目。第二阶段已覆盖 FastAPI/OpenAPI、JWT角色权限、版本化规则DSL、可验证证据包、混合检索、时间切分风险模型和可重放控制事件流。
 
-## å½“å‰å¯è¿è¡Œæ¨¡å—
+## 当前可运行模块
 
-- **TaxFlow Nexus**ï¼šåˆæˆå‘ç¥¨ç”Ÿæˆã€æ‰¹é‡å…¥åº“ã€ç‰ˆæœ¬åŒ–ç¨ŽåŠ¡è§„åˆ™ã€å¼‚å¸¸å‘çŽ°ã€å“ˆå¸Œå®¡è®¡é“¾ã€‚
-- **RegIntel Copilot**ï¼šæ³•è§„æ–‡æ¡£ç‰ˆæœ¬åŒ–ã€ä¸­æ–‡/è‹±æ–‡è¯é¡¹æ£€ç´¢ã€å¸¦åŽŸæ–‡å¼•ç”¨çš„è¯æ®åž‹å›žç­”ã€æ— è¯æ®æ‹’ç­”ã€‚
-- **ControlPulse**ï¼šITæŽ§åˆ¶äº‹ä»¶æŽ¥å…¥ã€ç­–ç•¥å³ä»£ç æ£€æµ‹ã€æŽ§åˆ¶ç¼ºé™·æ¡ˆä»¶ã€è¯æ®å“ˆå¸Œã€‚
-- **RiskGraph Investigator**ï¼šä¼ä¸š/è´¦æˆ·äº¤æ˜“å›¾ã€å…±äº«è´¦æˆ·ä¸Žå¾ªçŽ¯äº¤æ˜“æ£€æµ‹ã€å¯è§£é‡Šé£Žé™©è¯„åˆ†ã€‚
+- **TaxFlow Nexus**：合成发票生成、批量入库、版本化税务规则、异常发现、哈希审计链。
+- **RegIntel Copilot**：法规文档版本化、中文/英文词项检索、带原文引用的证据型回答、无证据拒答。
+- **ControlPulse**：IT控制事件接入、策略即代码检测、控制缺陷案件、证据哈希。
+- **RiskGraph Investigator**：企业/账户交易图、共享账户与循环交易检测、可解释风险评分。
 
-æ–°å¢žå¯æ ¸éªŒèƒ½åŠ›ï¼š
+新增可核验能力：
 
-- RegIntelï¼šè¯é¡¹åˆ†æ•°ä¸Žå­—ç¬¦TF-IDFæ··åˆæŽ’åºï¼Œå›ºå®šè¯„æµ‹é›†è¾“å‡ºRecall@Kå’ŒMRRã€‚
-- RiskGraphï¼šNetworkXå›¾ç‰¹å¾ã€ä¸¥æ ¼æœˆä»½åˆ‡åˆ†ã€éšæœºæ£®æž—åŸºçº¿ã€æ¨¡åž‹å¡å’Œæ¨¡åž‹åˆ¶å“ã€‚
-- ControlPulseï¼šJSONLè¿½åŠ å¼äº‹ä»¶æµã€åç§»é‡ã€æµå“ˆå¸Œé“¾ã€æ£€æŸ¥ç‚¹ã€å¹‚ç­‰æ¶ˆè´¹å’Œå›žæ”¾ã€‚
+- RegIntel：词项分数与字符TF-IDF混合排序，固定评测集输出Recall@K和MRR。
+- RiskGraph：NetworkX图特征、严格月份切分、随机森林基线、模型卡和模型制品。
+- ControlPulse：JSONL追加式事件流、偏移量、流哈希链、检查点、幂等消费和回放。
 
-## å¿«é€Ÿå¼€å§‹
+## 快速开始
 
 ```powershell
 $env:PYTHONPATH="src"
@@ -24,7 +24,7 @@ python -m unittest discover -s tests -v
 python -m flagship_lab.cli serve --db work/server.db --port 8080
 ```
 
-ç¬¬äºŒé˜¶æ®µ FastAPIï¼š
+第二阶段 FastAPI：
 
 ```powershell
 python -m pip install -e ".[test]"
@@ -32,9 +32,9 @@ $env:FLAGSHIP_JWT_SECRET="replace-with-a-random-secret-of-at-least-32-characters
 python -m flagship_lab.cli api --db work/api.db --port 8000 --allow-dev-tokens
 ```
 
-æµè§ˆ `http://127.0.0.1:8000/docs` æŸ¥çœ‹ OpenAPI äº¤äº’æ–‡æ¡£ã€‚`--allow-dev-tokens` ä»…ä¾›æœ¬åœ°æ¼”ç¤ºï¼›é»˜è®¤å…³é—­ã€‚
+浏览 `http://127.0.0.1:8000/docs` 查看 OpenAPI 交互文档。`--allow-dev-tokens` 仅供本地演示；默认关闭。
 
-ç”Ÿæˆæ›´å¤§è§„æ¨¡çš„ TaxFlow åŸºå‡†æ•°æ®ï¼š
+生成更大规模的 TaxFlow 基准数据：
 
 ```powershell
 $env:PYTHONPATH="src"
@@ -44,35 +44,34 @@ python -m flagship_lab.cli risk-benchmark --entities 400 --months 12 --train-thr
 python -m flagship_lab.cli control-stream-demo --db work/control.db --stream work/events.jsonl --checkpoint work/checkpoint.json
 ```
 
-æœåŠ¡å¯åŠ¨åŽå¯è®¿é—® `GET /health`ã€`POST /tax/transactions`ã€`POST /tax/runs`ã€`GET /tax/findings?run_id=...`ã€`POST /reg/documents`ã€`POST /reg/answer`ã€`POST /controls/events`ã€`GET /controls/cases`ã€`POST /graph/entities`ã€`POST /graph/edges`ã€`GET /graph/findings` å’Œ `GET /audit/verify`ã€‚
+服务启动后可访问 `GET /health`、`POST /tax/transactions`、`POST /tax/runs`、`GET /tax/findings?run_id=...`、`POST /reg/documents`、`POST /reg/answer`、`POST /controls/events`、`GET /controls/cases`、`POST /graph/entities`、`POST /graph/edges`、`GET /graph/findings` 和 `GET /audit/verify`。
 
-## çœŸå®žæ€§è§„åˆ™
+## 真实性规则
 
-README ä¸Žç®€åŽ†ä¸­çš„æ€§èƒ½ã€å¬å›žçŽ‡ç­‰æ•°å­—å¿…é¡»æ¥è‡ª `benchmark` æˆ–æµ‹è¯•è¾“å‡ºã€‚ä¸åº”æŠŠæœªæ¥è§„åˆ’å½“æˆå·²å®žçŽ°åŠŸèƒ½ã€‚
+README 与简历中的性能、召回率等数字必须来自 `benchmark` 或测试输出。不应把未来规划当成已实现功能。
 
-ç¬¬äºŒé˜¶æ®µ DSL å®žæµ‹ï¼š10ä¸‡æ¡åˆæˆäº¤æ˜“ç«¯åˆ°ç«¯åžå `43,324.53 æ¡/ç§’`ï¼›è¯¦ç»†çŽ¯å¢ƒé™åˆ¶è§ [`docs/benchmark-2026-08-11-phase2.md`](docs/benchmark-2026-08-11-phase2.md)ã€‚æž¶æž„è¾¹ç•Œè§ [`docs/architecture.md`](docs/architecture.md)ï¼Œæ¼”ç¤ºæ­¥éª¤è§ [`docs/demo-guide.md`](docs/demo-guide.md)ã€‚
+第二阶段 DSL 实测：10万条合成交易端到端吞吐 `43,324.53 条/秒`；详细环境限制见 [`docs/benchmark-2026-08-11-phase2.md`](docs/benchmark-2026-08-11-phase2.md)。架构边界见 [`docs/architecture.md`](docs/architecture.md)，演示步骤见 [`docs/demo-guide.md`](docs/demo-guide.md)。
 
-## å·²å®Œæˆçš„ç¬¬äºŒé˜¶æ®µèƒ½åŠ›
+## 已完成的第二阶段能力
 
-1. FastAPI/OpenAPI å’Œ Pydantic è¾“å…¥æ ¡éªŒã€‚
-2. HS256 JWTï¼ŒåŒ…å« `viewer`ã€`analyst`ã€`reviewer`ã€`admin` å››ç±»è§’è‰²ã€‚
-3. ç¨ŽåŠ¡è§„åˆ™ JSON DSLã€è§„åˆ™åŒ…ç‰ˆæœ¬ä¸Žå†…å®¹å“ˆå¸Œã€‚
-4. TaxFlow è¯æ® ZIPï¼šè¿è¡Œã€å‘çŽ°ã€å®¡è®¡äº‹ä»¶å’Œ SHA-256 æ¸…å•ï¼›æ”¯æŒç¯¡æ”¹æ£€æµ‹ã€‚
-5. 16é¡¹è‡ªåŠ¨åŒ–æµ‹è¯•ï¼Œè¦†ç›–401/403ã€è§„åˆ™åŒ…æ ¡éªŒã€è¯æ®ä¸‹è½½æƒé™ã€äº‹ä»¶æµã€ç¯¡æ”¹æ£€æµ‹å’Œæ•°æ®åº“è¿ç§»å¾€è¿”ã€‚
-6. RegIntelæ··åˆæ£€ç´¢è¯„æµ‹ã€RiskGraphæ—¶é—´åˆ‡åˆ†æ¨¡åž‹å’ŒControlPulseäº‹ä»¶æµå›žæ”¾ã€‚
+1. FastAPI/OpenAPI 和 Pydantic 输入校验。
+2. HS256 JWT，包含 `viewer`、`analyst`、`reviewer`、`admin` 四类角色。
+3. 税务规则 JSON DSL、规则包版本与内容哈希。
+4. TaxFlow 证据 ZIP：运行、发现、审计事件和 SHA-256 清单；支持篡改检测。
+5. 16项自动化测试，覆盖401/403、规则包校验、证据下载权限、事件流、篡改检测和数据库迁移往返。
+6. RegIntel混合检索评测、RiskGraph时间切分模型和ControlPulse事件流回放。
 
-## ä¸‹ä¸€é˜¶æ®µ
+## 下一阶段
 
-1. å¢žåŠ åˆ·æ–°ä»¤ç‰Œã€å¯†é’¥è½®æ¢ã€ç”¨æˆ·ç›®å½•å’Œæ›´ç»†ç²’åº¦èµ„æºæƒé™ã€‚
-2. TaxFlow å¢žåŠ å­—æ®µçº§è¡€ç¼˜ã€å¼‚å¸¸å®¡æ‰¹æµå’Œè¯æ®åŒ…éžå¯¹ç§°ç­¾åã€‚
-3. RegIntelå°†å½“å‰è¯é¡¹+å­—ç¬¦TF-IDFå‡çº§ä¸ºBM25+embedding+rereankerï¼Œå¹¶æ‰©å±•å…¬å¼€æ•°æ®è¯„æµ‹é›†ã€‚
-4. ControlPulseå°†JSONLé€‚é…å™¨å‡çº§ä¸ºRedpanda/Kafkaã€OPAå’Œå¯¹è±¡å­˜å‚¨è¯æ®æ¹–ã€‚
-5. RiskGraphå¢žåŠ SHAPã€å®žä½“éš”ç¦»éªŒè¯å’ŒNeo4jé€‚é…ã€‚
-6. å¢žåŠ  OpenTelemetry å¯è§‚æµ‹æ€§ï¼Œå¹¶æŠŠå½“å‰ React æ¼”ç¤ºç«¯æ‰©å±•ä¸ºå®Œæ•´ç®¡ç†å·¥ä½œå°ã€‚
+1. 增加刷新令牌、密钥轮换、用户目录和更细粒度资源权限。
+2. TaxFlow 增加字段级血缘、异常审批流和证据包非对称签名。
+3. RegIntel将当前词项+字符TF-IDF升级为BM25+embedding+rereanker，并扩展公开数据评测集。
+4. ControlPulse将JSONL适配器升级为Redpanda/Kafka、OPA和对象存储证据湖。
+5. RiskGraph增加SHAP、实体隔离验证和Neo4j适配。
+6. 增加 OpenTelemetry 可观测性，并把当前 React 演示端扩展为完整管理工作台。
 
-## éƒ¨ç½²ä¸Žæ¼”ç¤ºè¯æ®
+## 部署与演示证据
 
-- Alembicé¦–ç‰ˆè¿ç§»å·²åœ¨SQLiteå’Œæœ¬æœºPostgreSQL 18.3å®Œæˆå‡çº§ã€é™çº§ã€å†å‡çº§éªŒè¯ã€‚
-- React/Viteæ¼”ç¤ºç«¯å·²å®Œæˆç”Ÿäº§æž„å»ºä¸Žæµè§ˆå™¨æ£€æŸ¥ï¼›è¯¦è§[`docs/deployment-evidence-2026-08-11.md`](docs/deployment-evidence-2026-08-11.md)ã€‚
-- åŸºå‡†ã€æ¨¡åž‹åˆ¶å“ã€æµ‹è¯•å’Œè¯šä¿¡è¡¨è¿°æ±‡æ€»è§[`docs/portfolio-evidence-index.md`](docs/portfolio-evidence-index.md)ã€‚
-
+- Alembic首版迁移已在SQLite和本机PostgreSQL 18.3完成升级、降级、再升级验证。
+- React/Vite演示端已完成生产构建与浏览器检查；详见[`docs/deployment-evidence-2026-08-11.md`](docs/deployment-evidence-2026-08-11.md)。
+- 基准、模型制品、测试和诚信表述汇总见[`docs/portfolio-evidence-index.md`](docs/portfolio-evidence-index.md)。

@@ -1,0 +1,30 @@
+[project]
+name = "flagship-lab"
+version = "0.1.0"
+description = "Auditable tax technology, regulatory intelligence, IT controls, and graph risk MVPs"
+requires-python = ">=3.11"
+dependencies = [
+  "fastapi==0.141.1",
+  "uvicorn==0.52.1",
+  "sqlalchemy==2.0.51",
+  "PyJWT==2.13.0",
+  "numpy==2.5.2",
+  "scikit-learn==1.9.0",
+  "networkx==3.6.1",
+  "alembic==1.19.1",
+  "psycopg[binary]==3.3.4",
+]
+
+[project.optional-dependencies]
+test = ["pytest==9.1.1", "httpx==0.28.1"]
+
+[project.scripts]
+flagship-lab = "flagship_lab.cli:main"
+
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
