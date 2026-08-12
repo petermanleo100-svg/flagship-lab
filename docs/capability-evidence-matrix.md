@@ -21,6 +21,7 @@ This file is the release truth source. A capability may be described as **implem
 | OpenTelemetry and SLO alerts | Implemented with limitation | FastAPI/SQLAlchemy spans, OTLP/HTTP exporter, trace-correlated JSON logs and Prometheus alert rules | `test_telemetry.py`, observability tests | Collector/backend and alert routing require deployment configuration |
 | Container deployment baseline | Implemented with limitation | non-root image, read-only API filesystem, dropped capabilities, migration gate, PostgreSQL health check | GitHub CI image build and non-root inspection | orchestration, backup/restore drill and secret manager integration remain deployment work |
 | Enterprise operations workbench | Implemented with limitation | API readiness, tenant dev login, idempotent tax import/run, review, findings, control and audit views | Vite production build | Production OIDC redirect flow, pagination and full case/evidence workflows remain roadmap |
+| Backup and recovery | Implemented with limitation | AES-256-GCM logical backup, immutable retained object, clean-database restore, row-count and audit-chain verification | `test_backup_recovery.py` | PostgreSQL WAL/PITR, cross-region replication and scheduled restore drills require deployment infrastructure |
 
 ## Release audit rules
 
