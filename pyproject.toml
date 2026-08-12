@@ -28,6 +28,7 @@ kafka = ["confluent-kafka==2.12.2"]
 [project.scripts]
 flagship-lab = "flagship_lab.cli:main"
 flagship-worker = "flagship_lab.worker:main"
+flagship-operations = "flagship_lab.operations:main"
 
 
 [build-system]
