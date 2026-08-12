@@ -12,11 +12,11 @@
 - [ ] Concurrent idempotency/audit-chain tests and clean PostgreSQL restore pass without skip.
 - [ ] Object Lock retention and KMS signer verification pass with deployment credentials.
 - [ ] Kafka delivery, consumer receipts, dead-letter authorization and replay are exercised with the deployment broker.
-- [ ] OTLP traces and SLO alerts reach named operational owners; readiness failure pages the correct team.
+- [ ] OTLP traces reach the backend; Node Exporter (or equivalent) scrapes `FLAGSHIP_TEXTFILE_DIR`; SLO, scheduled-operation and stale-backup alerts reach named owners, and readiness failure pages the correct team.
 - [ ] Logical restore and managed PostgreSQL PITR meet customer-approved RPO/RTO in a recorded drill.
 - [ ] Synthetic end-to-end tax, regulation, control and evidence workflows pass before real data admission.
 - [ ] Capability matrix, README and applicant materials contain no claim beyond release evidence.
-- [ ] CI `promtool` syntax and synthetic firing tests pass for readiness, 5xx and p95 latency; a real test notification reaches each named owner in the deployment environment.
+- [ ] CI `promtool` syntax and synthetic firing tests pass for readiness, 5xx, p95 latency, operation failure and stale backup; a real test notification reaches each named owner in the deployment environment.
 - [ ] `pip-audit` passes; the release commit has a retained SPDX image SBOM and no unexcepted fixable High/Critical vulnerability. Review the sole time-bounded `CVE-2026-15308` not-affected record and confirm `html.parser` remains outside executable source.
 - [ ] Candidate archive checksum and both GitHub attestations verify before a SemVer tag is approved.
 - [ ] Tagged GHCR image resolves to the recorded immutable digest and provenance/SBOM attestations verify.

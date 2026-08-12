@@ -12,6 +12,7 @@ from sqlalchemy import select
 from .backup import BackupService
 from .core import Database
 from .object_store import LocalWormObjectStore, StoredObject
+from .operation_metrics import record_operation
 from .outbox import OutboxPublisher
 from .preflight import PreflightError,run_preflight
 from .sql_models import DeadLetterEvent
@@ -44,6 +45,27 @@ def main() -> None:
     replay.add_argument("dead_letter_id", type=int)
     commands.add_parser("preflight")
     args = parser.parse_args()
+    operation = args.command.replace("-", "_")
+    metric_dir = os.environ.get("FLAGSHIP_TEXTFILE_DIR", "")
+    metric_path = Path(metric_dir) / f"flagship_{operation}.prom" if metric_dir else None
+    try:
+        result = _execute(args)
+    except BaseException as exc:
+        if metric_path:
+            try:
+                record_operation(metric_path, operation, False)
+            except Exception as metric_exc:
+                exc.add_note(f"failed to record operation metric: {metric_exc}")
+        raise
+    valid = result.get("valid", True) if isinstance(result, dict) else True
+    if metric_path:
+        record_operation(metric_path, operation, valid)
+    print(json.dumps(result, indent=2, sort_keys=True))
+    if not valid:
+        raise SystemExit(2)
+
+
+def _execute(args) -> dict:
     database_url = os.environ.get("FLAGSHIP_DATABASE_URL")
     store_path = os.environ.get("FLAGSHIP_OPERATIONS_STORE", "work/operations-store")
     if not database_url:
@@ -59,30 +81,28 @@ def main() -> None:
                 allow_dev_tokens=os.environ.get("FLAGSHIP_ALLOW_DEV_TOKENS", "false").lower() == "true",
             )
         except PreflightError as exc:
-            print(json.dumps({"valid": False, "error": str(exc)}, sort_keys=True))
-            raise SystemExit(2)
-        print(json.dumps(result, sort_keys=True))
-        return
+            return {"valid": False, "error": str(exc)}
+        return result
     db = Database(database_url, create_schema=False)
     store = LocalWormObjectStore(store_path)
     if args.command == "backup-create":
         result = BackupService(db, store, encryption_key(), retention_days=args.retention_days).create(args.backup_id)
         metadata = Path(store_path) / f"backup-{args.backup_id}.restore.json"
         metadata.write_text(json.dumps(asdict(result.stored), indent=2), encoding="utf-8")
-        print(json.dumps({"stored": asdict(result.stored), "tables": result.tables,
-                          "restore_metadata": str(metadata)}, indent=2))
+        return {"stored": asdict(result.stored), "tables": result.tables,
+                "restore_metadata": str(metadata)}
     elif args.command == "backup-restore":
         stored = StoredObject(**json.loads(Path(args.metadata_file).read_text(encoding="utf-8")))
         target = Database(args.target_url)
-        print(json.dumps(BackupService(db, store, encryption_key()).restore(stored, target), indent=2))
+        return BackupService(db, store, encryption_key()).restore(stored, target)
     elif args.command == "dlq-list":
         with db.connect() as conn:
             rows = [dict(row) for row in conn.execute(select(DeadLetterEvent).where(
                 DeadLetterEvent.replayed_at.is_(None)).order_by(DeadLetterEvent.id)).mappings()]
-        print(json.dumps(rows, indent=2))
+        return rows
     else:
         OutboxPublisher(db, lambda _event: None).replay_dead_letter(args.dead_letter_id)
-        print(json.dumps({"dead_letter_id": args.dead_letter_id, "status": "queued_for_replay"}))
+        return {"dead_letter_id": args.dead_letter_id, "status": "queued_for_replay"}
 
 
 if __name__ == "__main__":
