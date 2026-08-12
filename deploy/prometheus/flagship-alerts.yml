@@ -22,7 +22,7 @@ groups:
         labels: {severity: critical, service: flagship-lab, owner: platform-operations}
         annotations: {summary: "Flagship scheduled operation failed", runbook_url: "https://github.com/petermanleo100-svg/flagship-lab/blob/main/docs/production-runbook.md"}
       - alert: FlagshipTextfileCollectorFailed
-        expr: node_textfile_scrape_error == 1
+        expr: node_textfile_scrape_error{job="flagship-node-exporter"} == 1
         for: 5m
         labels: {severity: critical, service: flagship-lab, owner: platform-operations}
         annotations: {summary: "Flagship operation metrics collector cannot read one or more textfiles", runbook_url: "https://github.com/petermanleo100-svg/flagship-lab/blob/main/docs/production-runbook.md"}

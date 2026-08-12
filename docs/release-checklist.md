@@ -3,7 +3,7 @@
 - [ ] CI backend, PostgreSQL, frontend, container and full Compose smoke jobs pass on the exact release commit.
 - [ ] GitHub `main` protection still enforces strict `backend`, `postgres`, `frontend`, `container`, `compose-smoke` and `analyze` checks for administrators, with force-push and deletion disabled.
 - [ ] `flagship-operations preflight` returns `valid: true` using the exact production runtime identity and secret bindings.
-- [ ] Complete `docs/admission-evidence.example.json` with durable evidence for the exact release SHA, then require `flagship-operations admission-verify <file> --release-sha <sha>` to return `valid: true`; evidence older than seven days must be renewed.
+- [ ] Complete schema-v2 `docs/admission-evidence.example.json` with the deployer, a different verifier, durable URI and independently calculated SHA-256 for every exact-release control; require `flagship-operations admission-verify <file> --release-sha <sha>` to return `valid: true`. Evidence older than seven days cannot be overridden and must be renewed.
 - [ ] CodeQL passes for Python and JavaScript/TypeScript on the exact release commit.
 - [ ] Dependency update findings are reviewed; critical/high vulnerabilities have no unapproved exception.
 - [ ] CODEOWNERS review covers migrations, identity/authorization, signing, evidence and recovery changes.
