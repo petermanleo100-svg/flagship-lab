@@ -8,7 +8,7 @@
 - [ ] CODEOWNERS review covers migrations, identity/authorization, signing, evidence and recovery changes.
 - [ ] OIDC issuer, audience, tenant, roles, resource scopes and signing-key rotation are tested with the customer IdP.
 - [ ] Request-serving database role is non-owner and `NOBYPASSRLS`; direct SQL tenant attacks pass.
-- [ ] Alembic upgrade, latest downgrade and re-upgrade pass against a production-like database copy.
+- [ ] PostgreSQL isolated-schema latest-revision downgrade/re-upgrade CI passes with business-row preservation and restored forced RLS; repeat against the production-like database copy.
 - [ ] Concurrent idempotency/audit-chain tests and clean PostgreSQL restore pass without skip.
 - [ ] Object Lock retention and KMS signer verification pass with deployment credentials.
 - [ ] Kafka delivery, consumer receipts, dead-letter authorization and replay are exercised with the deployment broker.

@@ -2,10 +2,14 @@ from __future__ import annotations
 
 import os
 import base64
+import subprocess
+import sys
+from pathlib import Path
 
 import pytest
 from concurrent.futures import ThreadPoolExecutor
 from sqlalchemy import delete, func, select, text
+from sqlalchemy.engine import make_url
 
 from flagship_lab.core import Database, verify_audit_chain
 from flagship_lab.sql_models import AuditEvent, Base, TaxTransactionRow
@@ -13,6 +17,9 @@ from flagship_lab.taxflow import TaxFlowService, TaxTransaction
 from flagship_lab.backup import BackupService
 from flagship_lab.object_store import LocalWormObjectStore
 from flagship_lab.preflight import PreflightError, TENANT_TABLES, run_preflight
+
+
+ROOT = Path(__file__).parents[1]
 
 
 @pytest.fixture()
@@ -81,6 +88,35 @@ def test_postgres_backup_restores_to_clean_schema(postgres_db, tmp_path):
         target.dispose()
         with postgres_db.engine.begin() as conn:
             conn.execute(text("DROP SCHEMA recovery_target CASCADE"))
+
+
+def test_postgres_latest_migration_rollback_preserves_business_data(postgres_db):
+    with postgres_db.engine.begin() as conn:
+        conn.execute(text("DROP SCHEMA IF EXISTS rollback_target CASCADE"))
+        conn.execute(text("CREATE SCHEMA rollback_target"))
+    target_url = make_url(postgres_db.url).set(query={"options": "-csearch_path=rollback_target"})
+    rendered_url = target_url.render_as_string(hide_password=False)
+    target = Database(rendered_url, create_schema=False)
+    environment = {**os.environ, "FLAGSHIP_DATABASE_URL": rendered_url}
+    try:
+        subprocess.run([sys.executable, "-m", "alembic", "upgrade", "head"], cwd=ROOT, env=environment, check=True)
+        TaxFlowService(target, "rollback").ingest([
+            TaxTransaction("PG-ROLLBACK", "S", "B", "2026-01-01", "100", "0.13", "13")])
+        target.dispose()
+        subprocess.run([sys.executable, "-m", "alembic", "downgrade", "20260812_0004"], cwd=ROOT, env=environment, check=True)
+        with target.engine.connect() as conn:
+            assert conn.execute(text("SELECT count(*) FROM tax_transactions WHERE invoice_id='PG-ROLLBACK'")).scalar_one() == 1
+            assert not conn.execute(text("SELECT relrowsecurity FROM pg_class WHERE relname='tax_transactions' AND relnamespace='rollback_target'::regnamespace")).scalar_one()
+        target.dispose()
+        subprocess.run([sys.executable, "-m", "alembic", "upgrade", "head"], cwd=ROOT, env=environment, check=True)
+        with target.engine.connect() as conn:
+            assert conn.execute(text("SELECT count(*) FROM tax_transactions WHERE invoice_id='PG-ROLLBACK'")).scalar_one() == 1
+            state = conn.execute(text("SELECT relrowsecurity, relforcerowsecurity FROM pg_class WHERE relname='tax_transactions' AND relnamespace='rollback_target'::regnamespace")).one()
+            assert state == (True, True)
+    finally:
+        target.dispose()
+        with postgres_db.engine.begin() as conn:
+            conn.execute(text("DROP SCHEMA rollback_target CASCADE"))
 
 
 def test_postgres_rls_blocks_unscoped_and_cross_tenant_queries(postgres_db):
