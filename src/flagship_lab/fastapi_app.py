@@ -8,13 +8,17 @@ from typing import Any
 from uuid import uuid4
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
-from fastapi.responses import FileResponse, PlainTextResponse
+from fastapi.responses import FileResponse, PlainTextResponse, Response
 from pydantic import BaseModel, Field
 
 from .auth import HMACTokenVerifier, TokenVerifier, issue_token, require_verified_roles
+from .authorization import authorize_resource
 from .controlpulse import ControlEvent, ControlPulseService
 from .core import Database, database_health, verify_audit_chain
 from .evidence import export_tax_run
+from .evidence_service import EvidenceService
+from .object_store import LocalWormObjectStore, ObjectStore
+from .signing import Ed25519Signer, EvidenceSigner
 from .observability import Metrics
 from .regintel import RegIntelService
 from .riskgraph import Edge, Entity, RiskGraphService
@@ -26,6 +30,7 @@ class TokenRequest(BaseModel):
     tenant_id: str = Field(default="default", min_length=1, max_length=64, pattern=r"^[a-zA-Z0-9_-]+$")
     roles: list[str]
     ttl_minutes: int = Field(default=60, ge=1, le=480)
+    resource_scopes: list[str] = Field(default_factory=lambda: ["*:*:*"])
 
 
 class TaxTransactionIn(BaseModel):
@@ -101,6 +106,9 @@ def create_app(
     token_verifier: TokenVerifier | None = None,
     evidence_signing_private_key_pem: str | bytes | None = None,
     initialize_schema: bool = True,
+    object_store: ObjectStore | None = None,
+    evidence_signer: EvidenceSigner | None = None,
+    evidence_retention_days: int = 2555,
 ) -> FastAPI:
     if len(jwt_secret) < 32:
         raise ValueError("jwt_secret must contain at least 32 characters")
@@ -113,6 +121,12 @@ def create_app(
     metrics = Metrics()
     logger = logging.getLogger("flagship.request")
     verifier = token_verifier or HMACTokenVerifier(jwt_secret)
+    managed_evidence = None
+    if object_store is not None or evidence_signer is not None:
+        if object_store is None or evidence_signer is None:
+            raise ValueError("object_store and evidence_signer must be configured together")
+        managed_evidence = EvidenceService(db, object_store, evidence_signer,
+                                           retention_days=evidence_retention_days)
     can_view = require_verified_roles(verifier, "viewer", "analyst", "reviewer", "admin")
     can_analyze = require_verified_roles(verifier, "analyst", "admin")
     can_review = require_verified_roles(verifier, "reviewer", "admin")
@@ -166,7 +180,7 @@ def create_app(
         if not allow_dev_tokens:
             raise HTTPException(status_code=404, detail="development token endpoint disabled")
         return {"access_token": issue_token(request.subject, request.roles, jwt_secret, request.ttl_minutes,
-                                              request.tenant_id), "token_type": "bearer"}
+                                              request.tenant_id, request.resource_scopes), "token_type": "bearer"}
 
     @app.post("/tax/transactions", status_code=201)
     def ingest_tax(items: list[TaxTransactionIn], claims: dict = Depends(can_analyze),
@@ -193,6 +207,7 @@ def create_app(
 
     @app.post("/tax/runs/{run_id}/review")
     def review_tax_run(run_id: str, request: ReviewDecisionIn, claims: dict = Depends(can_review)):
+        authorize_resource(claims, "tax_run", run_id, "review")
         tax = TaxFlowService(db, claims["tenant_id"])
         try:
             return tax.review_run(run_id, claims["sub"], request.decision, request.comment)
@@ -201,21 +216,30 @@ def create_app(
 
     @app.get("/tax/findings")
     def tax_findings(run_id: str, claims: dict = Depends(can_view)):
+        authorize_resource(claims, "tax_run", run_id, "read")
         tax = TaxFlowService(db, claims["tenant_id"])
         return tax.findings(run_id)
 
     @app.get("/evidence/tax/{run_id}", response_class=FileResponse)
     def tax_evidence(run_id: str, claims: dict = Depends(can_review)):
+        authorize_resource(claims, "tax_run", run_id, "evidence")
         tax = TaxFlowService(db, claims["tenant_id"])
         output = Path("work/evidence") / claims["tenant_id"] / f"tax-{run_id}.zip"
         try:
             workflow = tax.workflow(run_id)
             if workflow is None or workflow["status"] != "APPROVED":
                 raise HTTPException(status_code=409, detail="tax run requires independent approval")
-            with db.connect() as conn:
-                export_tax_run(conn, run_id, output, signing_secret=signing_secret,
-                               key_id="flagship-api-signing-v1", tenant_id=claims["tenant_id"],
-                               signing_private_key_pem=evidence_signing_private_key_pem)
+            if managed_evidence is not None:
+                stored = managed_evidence.preserve_tax_run(claims["tenant_id"], run_id)
+                return Response(content=managed_evidence.read(stored), media_type="application/zip",
+                                headers={"Content-Disposition": f'attachment; filename="tax-{run_id}.zip"',
+                                         "X-Evidence-Version": stored.version_id,
+                                         "X-Evidence-SHA256": stored.sha256})
+            else:
+                with db.connect() as conn:
+                    export_tax_run(conn, run_id, output, signing_secret=signing_secret,
+                                   key_id="flagship-api-signing-v1", tenant_id=claims["tenant_id"],
+                                   signing_private_key_pem=evidence_signing_private_key_pem)
         except ValueError as exc:
             raise HTTPException(status_code=404, detail=str(exc))
         return FileResponse(output, media_type="application/zip", filename=output.name)
@@ -286,6 +310,7 @@ def create_app(
             "development_tokens_enabled": allow_dev_tokens,
             "external_token_verifier": token_verifier is not None,
             "asymmetric_evidence_signing": evidence_signing_private_key_pem is not None,
+            "managed_immutable_evidence": managed_evidence is not None,
         }
 
     return app

@@ -120,6 +120,8 @@ def main() -> None:
         import uvicorn
         from .auth import OIDCJWKSTokenVerifier
         from .fastapi_app import create_app
+        from .object_store import LocalWormObjectStore
+        from .signing import Ed25519Signer
 
         secret = os.environ.get("FLAGSHIP_JWT_SECRET", "")
         issuer = os.environ.get("FLAGSHIP_OIDC_ISSUER")
@@ -136,10 +138,14 @@ def main() -> None:
         signing_secret = os.environ.get("FLAGSHIP_EVIDENCE_SIGNING_SECRET")
         private_key_path = os.environ.get("FLAGSHIP_EVIDENCE_PRIVATE_KEY_FILE")
         private_key_pem = Path(private_key_path).read_bytes() if private_key_path else None
+        store = LocalWormObjectStore(os.environ.get("FLAGSHIP_EVIDENCE_STORE", "work/object-store")) if private_key_pem else None
+        signer = Ed25519Signer(private_key_pem, os.environ.get("FLAGSHIP_EVIDENCE_KEY_ID", "local-ed25519-v1")) if private_key_pem else None
         uvicorn.run(
             create_app(os.environ.get("FLAGSHIP_DATABASE_URL", args.db), secret, args.allow_dev_tokens,
                        signing_secret, verifier, private_key_pem,
-                       initialize_schema=os.environ.get("FLAGSHIP_DATABASE_URL") is None),
+                       initialize_schema=os.environ.get("FLAGSHIP_DATABASE_URL") is None,
+                       object_store=store, evidence_signer=signer,
+                       evidence_retention_days=int(os.environ.get("FLAGSHIP_EVIDENCE_RETENTION_DAYS", "2555"))),
             host=args.host,
             port=args.port,
         )
