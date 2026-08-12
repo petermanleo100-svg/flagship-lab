@@ -12,7 +12,7 @@ from flagship_lab.sql_models import AuditEvent, Base, TaxTransactionRow
 from flagship_lab.taxflow import TaxFlowService, TaxTransaction
 from flagship_lab.backup import BackupService
 from flagship_lab.object_store import LocalWormObjectStore
-from flagship_lab.preflight import PreflightError, run_preflight
+from flagship_lab.preflight import PreflightError, TENANT_TABLES, run_preflight
 
 
 @pytest.fixture()
@@ -122,6 +122,11 @@ def test_postgres_rls_blocks_unscoped_and_cross_tenant_queries(postgres_db):
 
 def test_production_preflight_accepts_runtime_role_and_rejects_owner(postgres_db):
     with postgres_db.engine.begin() as conn:
+        # This fixture rebuilds ORM tables after Alembic, so recreate the exact
+        # migration security state before exercising the admission contract.
+        for table in TENANT_TABLES:
+            conn.execute(text(f'ALTER TABLE "{table}" ENABLE ROW LEVEL SECURITY'))
+            conn.execute(text(f'ALTER TABLE "{table}" FORCE ROW LEVEL SECURITY'))
         conn.execute(text("DROP ROLE IF EXISTS flagship_preflight"))
         conn.execute(text("CREATE ROLE flagship_preflight LOGIN PASSWORD 'preflight-password' NOSUPERUSER NOBYPASSRLS"))
         conn.execute(text("GRANT CONNECT ON DATABASE flagship TO flagship_preflight"))
