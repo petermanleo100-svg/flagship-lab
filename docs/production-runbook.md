@@ -31,6 +31,8 @@ flagship-operations backup-restore /retained/backup/store/backup-nightly-2026-08
 
 Success requires `valid: true`, exact per-table counts and valid audit chains for every tenant. Execute a synthetic post-restore transaction before recording the drill as passed. Logical backup complements PostgreSQL WAL/PITR; test both at least quarterly.
 
+Set `FLAGSHIP_TEXTFILE_DIR` to a Node Exporter textfile-collector directory (or equivalent). Every `flagship-operations` command atomically writes a separate bounded-label metric and preserves last-success time after failure. Alert on non-zero exit, `operation_success == 0`, or backup age beyond the 15-minute RPO. Treat an unwritable metrics directory as a deployment failure.
+
 ## Outbox and dead letters
 
 Run `flagship-worker` with Kafka idempotence and `acks=all`. Alert on unpublished events approaching `max_attempts` and any new dead letter. Inspect and replay only after resolving the cause:
@@ -46,7 +48,7 @@ Replayed events retain the original stable event ID. Consumers must use `Idempot
 
 The API exports OTLP traces and Prometheus metrics. Deploy `deploy/otel-collector.yaml`, route the collector to the approved backend, and load `deploy/prometheus/flagship-alerts.yml`. A database failure must make `/health/ready` return 503 while `/health/live` remains available. Do not restart-loop a healthy process when only a dependency is unavailable.
 
-CI validates Prometheus syntax and executes synthetic firing scenarios for readiness, 5xx rate and p95 latency with `promtool`. Rules carry stable `service`, `owner=platform-operations` and runbook labels; map owner plus severity to named receivers. Receiver credentials, notification routing and a real test page remain deployment acceptance gates. CI runs `pip-audit`, retains an SPDX JSON image SBOM for 30 days, and blocks image vulnerabilities that are High/Critical with a known fix. Review unfixed findings explicitly; do not describe them as remediated. Provenance attestation is reserved for a tagged image publication workflow because ordinary CI images are not release artifacts.
+CI validates Prometheus syntax and executes synthetic firing scenarios for readiness, 5xx rate, p95 latency, scheduled-operation failure and stale backup with `promtool`. Rules carry stable `service`, `owner=platform-operations` and runbook labels; map owner plus severity to named receivers. Receiver credentials, notification routing and a real test page remain deployment acceptance gates. CI runs `pip-audit`, retains an SPDX JSON image SBOM for 30 days, and blocks image vulnerabilities that are High/Critical with a known fix. Review unfixed findings explicitly; do not describe them as remediated. Provenance attestation is reserved for a tagged image publication workflow because ordinary CI images are not release artifacts.
 
 The `release-image` workflow separates proof from publication. Manual dispatch creates a 14-day candidate archive, SHA-256 checksum and SBOM, then records GitHub provenance and SBOM attestations without creating a registry image. Only a `vX.Y.Z` tag publishes the exact commit to `ghcr.io/<owner>/flagship-lab`, captures its immutable digest, and attaches provenance plus SBOM attestations. Complete the release checklist before tagging; verify with `gh attestation verify oci://ghcr.io/<owner>/flagship-lab:vX.Y.Z -R <owner>/flagship-lab`.
 
