@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
-from typing import Callable
+from dataclasses import dataclass
+from typing import Callable, Protocol
 
 import jwt
 from fastapi import Depends, HTTPException, status
@@ -11,6 +12,44 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 ALGORITHM = "HS256"
 VALID_ROLES = frozenset({"viewer", "analyst", "reviewer", "admin"})
 bearer = HTTPBearer(auto_error=False)
+
+
+class TokenVerifier(Protocol):
+    def verify(self, token: str) -> dict: ...
+
+
+@dataclass(frozen=True)
+class HMACTokenVerifier:
+    secret: str
+
+    def verify(self, token: str) -> dict:
+        return decode_token(token, self.secret)
+
+
+class OIDCJWKSTokenVerifier:
+    def __init__(self, issuer: str, audience: str, jwks_url: str, *, jwks_client=None,
+                 algorithms: tuple[str, ...] = ("RS256", "ES256")):
+        if not issuer.startswith("https://") and issuer not in {"http://localhost", "http://127.0.0.1"}:
+            raise ValueError("OIDC issuer must use HTTPS")
+        if not audience or not jwks_url:
+            raise ValueError("OIDC audience and JWKS URL are required")
+        self.issuer = issuer.rstrip("/")
+        self.audience = audience
+        self.algorithms = algorithms
+        self.jwks_client = jwks_client or jwt.PyJWKClient(jwks_url, cache_keys=True, lifespan=300, timeout=5)
+
+    def verify(self, token: str) -> dict:
+        signing_key = self.jwks_client.get_signing_key_from_jwt(token)
+        claims = jwt.decode(token, signing_key.key, algorithms=list(self.algorithms),
+                            audience=self.audience, issuer=self.issuer,
+                            options={"require": ["sub", "tenant_id", "roles", "iat", "exp", "aud", "iss"]})
+        unknown = set(claims.get("roles", [])) - VALID_ROLES
+        if unknown or not claims.get("roles"):
+            raise jwt.InvalidTokenError("token contains invalid roles")
+        tenant = claims.get("tenant_id", "")
+        if not tenant or len(tenant) > 64 or not tenant.replace("_", "").replace("-", "").isalnum():
+            raise jwt.InvalidTokenError("token contains invalid tenant_id")
+        return claims
 
 
 def issue_token(
@@ -45,7 +84,7 @@ def decode_token(token: str, secret: str) -> dict:
     )
 
 
-def require_roles(secret: str, *allowed: str) -> Callable:
+def require_verified_roles(verifier: TokenVerifier, *allowed: str) -> Callable:
     allowed_set = set(allowed)
     if not allowed_set or not allowed_set <= VALID_ROLES:
         raise ValueError("require_roles must receive known roles")
@@ -54,7 +93,7 @@ def require_roles(secret: str, *allowed: str) -> Callable:
         if credentials is None:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="missing bearer token")
         try:
-            claims = decode_token(credentials.credentials, secret)
+            claims = verifier.verify(credentials.credentials)
         except jwt.PyJWTError:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="invalid or expired token")
         if not (set(claims.get("roles", [])) & allowed_set):
@@ -62,3 +101,8 @@ def require_roles(secret: str, *allowed: str) -> Callable:
         return claims
 
     return dependency
+
+
+def require_roles(secret: str, *allowed: str) -> Callable:
+    """Backward-compatible development helper."""
+    return require_verified_roles(HMACTokenVerifier(secret), *allowed)

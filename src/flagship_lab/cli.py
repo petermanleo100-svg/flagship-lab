@@ -84,7 +84,7 @@ def benchmark(db_path: str, rows: int) -> dict:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Flagship Lab MVP runner")
+    parser = argparse.ArgumentParser(description="Flagship Lab platform runner")
     sub = parser.add_subparsers(dest="command", required=True)
     demo_parser = sub.add_parser("demo")
     demo_parser.add_argument("--db", default="work/demo.db")
@@ -118,14 +118,27 @@ def main() -> None:
         return
     if args.command == "api":
         import uvicorn
+        from .auth import OIDCJWKSTokenVerifier
         from .fastapi_app import create_app
 
-        secret = os.environ.get("FLAGSHIP_JWT_SECRET")
-        if not secret:
-            raise SystemExit("FLAGSHIP_JWT_SECRET is required and must contain at least 32 characters")
+        secret = os.environ.get("FLAGSHIP_JWT_SECRET", "")
+        issuer = os.environ.get("FLAGSHIP_OIDC_ISSUER")
+        audience = os.environ.get("FLAGSHIP_OIDC_AUDIENCE")
+        jwks_url = os.environ.get("FLAGSHIP_OIDC_JWKS_URL")
+        verifier = None
+        if issuer or audience or jwks_url:
+            if not all((issuer, audience, jwks_url)):
+                raise SystemExit("FLAGSHIP_OIDC_ISSUER, FLAGSHIP_OIDC_AUDIENCE and FLAGSHIP_OIDC_JWKS_URL are required together")
+            verifier = OIDCJWKSTokenVerifier(issuer, audience, jwks_url)
+            secret = secret or "development-token-endpoint-disabled-000"
+        elif not secret:
+            raise SystemExit("Configure OIDC/JWKS or FLAGSHIP_JWT_SECRET (development only)")
         signing_secret = os.environ.get("FLAGSHIP_EVIDENCE_SIGNING_SECRET")
+        private_key_path = os.environ.get("FLAGSHIP_EVIDENCE_PRIVATE_KEY_FILE")
+        private_key_pem = Path(private_key_path).read_bytes() if private_key_path else None
         uvicorn.run(
-            create_app(args.db, secret, args.allow_dev_tokens, signing_secret),
+            create_app(os.environ.get("FLAGSHIP_DATABASE_URL", args.db), secret, args.allow_dev_tokens,
+                       signing_secret, verifier, private_key_pem),
             host=args.host,
             port=args.port,
         )

@@ -11,13 +11,13 @@ This file is the release truth source. A capability may be described as **implem
 | Four-eyes tax review and control closure | Implemented | independent actor validation and optimistic version updates | governance lifecycle tests | Identity proof depends on configured token verifier |
 | Transactional outbox + publisher | Implemented with limitation | same-transaction persistence, ordered batches, PostgreSQL `SKIP LOCKED`, retry counter | `test_outbox.py` | At-least-once semantics; concrete Kafka/AMQP adapter and dead-letter operations remain roadmap |
 | Signed evidence ZIP | Implemented with limitation | tenant-filtered manifest, file hashes, Ed25519 public-key verification; legacy HMAC compatibility | evidence tamper tests and `test_ed25519_evidence_signature_is_publicly_verifiable` | KMS custody and object-lock storage are roadmap |
-| RBAC bearer authentication | Implemented with limitation | signed JWT claims, issuer/audience/expiry/role/tenant checks | API RBAC and token tests | Current verifier uses shared-secret HS256; OIDC/JWKS is roadmap |
+| OIDC/JWKS and RBAC authentication | Implemented with limitation | pluggable verifier; RS256/ES256 JWKS, issuer/audience/expiry/role/tenant validation; HS256 dev mode | API RBAC tests and `test_oidc_auth.py` | Provider discovery/group mapping and key-rotation integration test remain deployment work |
 | Regulation retrieval | Implemented | versioned corpus, lexical + char-TFIDF retrieval, refusal and citations | analytics evaluation tests | Distributed vector index and ingestion crawler are roadmap |
 | Risk graph explainability | Implemented | tenant graph persistence, shared-account and 3-cycle rules | graph tests | Large-graph engine and analyst case workflow are roadmap |
 | Liveness/readiness | Implemented | separate live and DB-backed ready endpoints | readiness test | Metrics/traces/alerts are roadmap |
 | PostgreSQL runtime CI | Implemented | SQLAlchemy models, psycopg runtime and dedicated service job | `test_postgres_runtime_decimal_tenant_and_audit`; GitHub CI PostgreSQL 17 | Migration-chain execution on PostgreSQL is added in the next hardening batch |
 | Idempotent tax writes | Implemented | transaction-scoped request hash and response record for ingest/rule-run endpoints | `test_tax_write_idempotency_replays_and_rejects_key_reuse` | Other write endpoints use natural keys or remain roadmap |
-| OIDC/JWKS and resource ABAC | Roadmap | none | none | HS256 RBAC only |
+| Resource ABAC beyond tenant scope | Roadmap | tenant boundary and roles only | tenant attack tests | entity-level grants and policy engine are not implemented |
 | Object storage, KMS signatures | Roadmap | none | none | local filesystem + HMAC only |
 | Broker-backed async workers | Roadmap | outbox persistence only | none | no publisher/consumer SLA |
 | OpenTelemetry and SLO alerts | Roadmap | request ID and Server-Timing only | header test | no collector/dashboard/alert rules |
