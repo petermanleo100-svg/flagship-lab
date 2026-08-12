@@ -38,6 +38,21 @@ services:
     security_opt: ["no-new-privileges:true"]
     cap_drop: ["ALL"]
 
+  worker:
+    profiles: ["messaging"]
+    build: .
+    entrypoint: ["flagship-worker"]
+    environment:
+      FLAGSHIP_DATABASE_URL: postgresql+psycopg://flagship:${POSTGRES_PASSWORD}@postgres:5432/flagship
+      FLAGSHIP_KAFKA_BOOTSTRAP_SERVERS: ${FLAGSHIP_KAFKA_BOOTSTRAP_SERVERS:?set broker endpoints}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    read_only: true
+    tmpfs: [/tmp]
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: ["ALL"]
+
 volumes:
   postgres_data:
   evidence_data:

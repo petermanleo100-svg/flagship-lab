@@ -23,9 +23,11 @@ dependencies = [
 
 [project.optional-dependencies]
 test = ["pytest==9.1.1", "httpx==0.28.1"]
+kafka = ["confluent-kafka==2.12.2"]
 
 [project.scripts]
 flagship-lab = "flagship_lab.cli:main"
+flagship-worker = "flagship_lab.worker:main"
 
 
 [build-system]
