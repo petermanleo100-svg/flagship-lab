@@ -24,6 +24,7 @@ This file is the release truth source. A capability may be described as **implem
 | Backup and recovery | Implemented with limitation | audited CLI, AES-256-GCM logical backup, immutable retained object, clean-database restore, row-count and audit-chain verification | backup, operations CLI and PostgreSQL clean-restore tests | PostgreSQL WAL/PITR and cross-region replication require deployment infrastructure |
 | Repository security governance | Implemented with limitation | Python/JavaScript CodeQL workflow, weekly dependency updates, security-path CODEOWNERS and release checklist | CodeQL workflow on release commit; CI remains separately required | Branch protection and human approvals must be enabled in GitHub repository settings |
 | Container supply-chain evidence | Implemented with limitation | SPDX JSON SBOM for the built image and fixed-critical vulnerability gate | commit-pinned SBOM/scan actions and retained CI artifact | Registry publication, provenance attestation and admission policy belong to the tagged release environment |
+| Verifiable image release path | Implemented with limitation | manual candidate archive with checksum/SBOM/attestations; SemVer tags publish digest-addressed GHCR images with provenance and SBOM attestations | candidate workflow run and `gh attestation verify` | Formal registry publication still requires an approved SemVer tag and environment acceptance |
 
 ## Release audit rules
 

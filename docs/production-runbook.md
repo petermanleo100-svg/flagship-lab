@@ -44,6 +44,8 @@ The API exports OTLP traces and Prometheus metrics. Deploy `deploy/otel-collecto
 
 CI validates Prometheus rule syntax with `promtool`. Notification routing and a test page to each named owner remain deployment acceptance gates. Container CI retains an SPDX JSON SBOM for 30 days and blocks vulnerabilities that are both Critical and have a known fix. Review unfixed Critical findings explicitly; do not describe them as remediated. Provenance attestation is reserved for a tagged image publication workflow because ordinary CI images are not release artifacts.
 
+The `release-image` workflow separates proof from publication. Manual dispatch creates a 14-day candidate archive, SHA-256 checksum and SBOM, then records GitHub provenance and SBOM attestations without creating a registry image. Only a `vX.Y.Z` tag publishes the exact commit to `ghcr.io/<owner>/flagship-lab`, captures its immutable digest, and attaches provenance plus SBOM attestations. Complete the release checklist before tagging; verify with `gh attestation verify oci://ghcr.io/<owner>/flagship-lab:vX.Y.Z -R <owner>/flagship-lab`.
+
 ## Release gates
 
 1. Alembic upgrade, downgrade of the latest revision and re-upgrade pass.
