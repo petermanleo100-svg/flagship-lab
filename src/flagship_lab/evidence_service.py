@@ -17,7 +17,7 @@ class EvidenceService:
 
     def preserve_tax_run(self, tenant_id: str, run_id: str) -> StoredObject:
         key = f"{tenant_id}/tax/{run_id}.zip"
-        with self.db.connect() as conn:
+        with self.db.connect(tenant_id) as conn:
             package, manifest = build_tax_run_package(conn, run_id, tenant_id, self.signer)
             stored = self.store.put_immutable(key, package, "application/zip", self.retention_days)
             append_audit_event(conn, "evidence", "EVIDENCE_PRESERVED", run_id,

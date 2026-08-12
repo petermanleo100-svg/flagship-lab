@@ -34,7 +34,7 @@ class RegIntelService:
 
     def add_document(self, document_key: str, title: str, source_url: str, published_at: str, content: str) -> str:
         version_hash = sha256_json({"title": title, "published_at": published_at, "content": content})
-        with self.db.connect() as conn:
+        with self.db.connect(self.tenant_id) as conn:
             statement = pg_insert(RegulationDocument) if conn.dialect.name == "postgresql" else sqlite_insert(RegulationDocument)
             conn.execute(statement.values(
                 tenant_id=self.tenant_id, document_key=document_key, title=title, source_url=source_url,
@@ -45,7 +45,7 @@ class RegIntelService:
         return version_hash
 
     def _documents(self) -> list[dict]:
-        with self.db.connect() as conn:
+        with self.db.connect(self.tenant_id) as conn:
             return [dict(row) for row in conn.execute(select(RegulationDocument).where(
                 RegulationDocument.tenant_id == self.tenant_id).order_by(RegulationDocument.id)).mappings()]
 

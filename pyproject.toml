@@ -1,7 +1,7 @@
 [project]
 name = "flagship-lab"
 version = "0.1.0"
-description = "Auditable tax technology, regulatory intelligence, IT controls, and graph risk MVPs"
+description = "Auditable multi-tenant tax, regulatory, controls, and graph-risk workflow platform"
 requires-python = ">=3.11"
 dependencies = [
   "fastapi==0.141.1",

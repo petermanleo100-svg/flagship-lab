@@ -79,3 +79,40 @@ def test_postgres_backup_restores_to_clean_schema(postgres_db, tmp_path):
         target.dispose()
         with postgres_db.engine.begin() as conn:
             conn.execute(text("DROP SCHEMA recovery_target CASCADE"))
+
+
+def test_postgres_rls_blocks_unscoped_and_cross_tenant_queries(postgres_db):
+    alpha = TaxFlowService(postgres_db, "rls-alpha")
+    beta = TaxFlowService(postgres_db, "rls-beta")
+    alpha.ingest([TaxTransaction("RLS-A", "S", "B", "2026-01-01", "1", "0", "0")])
+    beta.ingest([TaxTransaction("RLS-B", "S", "B", "2026-01-01", "1", "0", "0")])
+    with postgres_db.engine.begin() as conn:
+        conn.execute(text("DROP ROLE IF EXISTS flagship_rls_test"))
+        conn.execute(text("CREATE ROLE flagship_rls_test LOGIN PASSWORD 'rls-test-password' NOSUPERUSER NOBYPASSRLS"))
+        conn.execute(text("GRANT USAGE ON SCHEMA public TO flagship_rls_test"))
+        conn.execute(text("GRANT SELECT,INSERT,UPDATE,DELETE ON ALL TABLES IN SCHEMA public TO flagship_rls_test"))
+        conn.execute(text("GRANT USAGE,SELECT ON ALL SEQUENCES IN SCHEMA public TO flagship_rls_test"))
+        for table in ("tax_transactions", "audit_events", "outbox_events"):
+            conn.execute(text(f'ALTER TABLE "{table}" ENABLE ROW LEVEL SECURITY'))
+            conn.execute(text(f'DROP POLICY IF EXISTS tenant_isolation ON "{table}"'))
+            conn.execute(text(f'''CREATE POLICY tenant_isolation ON "{table}"
+                USING (tenant_id = current_setting('flagship.tenant_id', true))
+                WITH CHECK (tenant_id = current_setting('flagship.tenant_id', true))'''))
+    app_url = postgres_db.engine.url.set(username="flagship_rls_test", password="rls-test-password")
+    app_db = Database(app_url.render_as_string(hide_password=False), create_schema=False)
+    try:
+        with app_db.connect() as conn:
+            assert conn.execute(select(func.count()).select_from(TaxTransactionRow)).scalar_one() == 0
+        with app_db.connect("rls-alpha") as conn:
+            rows = conn.execute(select(TaxTransactionRow.invoice_id)).scalars().all()
+            assert rows == ["RLS-A"]
+        with pytest.raises(Exception):
+            with app_db.connect("rls-alpha") as conn:
+                conn.execute(TaxTransactionRow.__table__.insert().values(
+                    tenant_id="rls-beta", invoice_id="ATTACK", invoice_date="2026-01-01", amount=1,
+                    tax_rate=0, tax_amount=0, currency="CNY", source_hash="x", ingested_at="now"))
+    finally:
+        app_db.dispose()
+        with postgres_db.engine.begin() as conn:
+            conn.execute(text("DROP OWNED BY flagship_rls_test"))
+            conn.execute(text("DROP ROLE flagship_rls_test"))

@@ -30,7 +30,7 @@ class ControlPulseService:
     def ingest_and_evaluate(self, event: ControlEvent) -> list[dict]:
         evidence_hash = sha256_json(asdict(event))
         cases = self._evaluate(event, evidence_hash)
-        with self.db.connect() as conn:
+        with self.db.connect(self.tenant_id) as conn:
             existing = conn.execute(
                 select(ControlEventRow.id).where(
                     ControlEventRow.tenant_id == self.tenant_id,
@@ -84,7 +84,7 @@ class ControlPulseService:
         return cases
 
     def open_cases(self) -> list[dict]:
-        with self.db.connect() as conn:
+        with self.db.connect(self.tenant_id) as conn:
             return [dict(row) for row in conn.execute(
                 select(ControlCase).where(ControlCase.tenant_id == self.tenant_id, ControlCase.status != "CLOSED")
                 .order_by(ControlCase.id)
@@ -95,7 +95,7 @@ class ControlPulseService:
         target = to_status.upper()
         if not reason.strip():
             raise ValueError("transition reason is required")
-        with self.db.connect() as conn:
+        with self.db.connect(self.tenant_id) as conn:
             row = conn.execute(
                 select(ControlCase, ControlEventRow.actor.label("event_actor"))
                 .join(ControlEventRow, (ControlEventRow.tenant_id == ControlCase.tenant_id) & (ControlEventRow.event_id == ControlCase.event_id))
@@ -124,7 +124,7 @@ class ControlPulseService:
             return {"case_id": case_id, "from_status": current, "to_status": target, "actor": actor}
 
     def case_history(self, case_id: int) -> list[dict]:
-        with self.db.connect() as conn:
+        with self.db.connect(self.tenant_id) as conn:
             return [dict(row) for row in conn.execute(
                 select(ControlCaseTransition).where(
                     ControlCaseTransition.tenant_id == self.tenant_id,

@@ -189,6 +189,7 @@ def create_app(
     @app.post("/tax/transactions", status_code=201)
     def ingest_tax(items: list[TaxTransactionIn], claims: dict = Depends(can_analyze),
                    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key")):
+        authorize_resource(claims, "tax_data", "transactions", "write")
         tax = TaxFlowService(db, claims["tenant_id"])
         try:
             count = tax.ingest([TaxTransaction(**item.model_dump()) for item in items], idempotency_key)
@@ -199,6 +200,7 @@ def create_app(
     @app.post("/tax/runs", status_code=201)
     def run_tax(request: RuleRunRequest, claims: dict = Depends(can_analyze),
                 idempotency_key: str | None = Header(default=None, alias="Idempotency-Key")):
+        authorize_resource(claims, "tax_run", "new", "create")
         tax = TaxFlowService(db, claims["tenant_id"])
         try:
             result = tax.run_rules(request.rule_version, request.rule_pack, idempotency_key)
@@ -240,7 +242,7 @@ def create_app(
                                          "X-Evidence-Version": stored.version_id,
                                          "X-Evidence-SHA256": stored.sha256})
             else:
-                with db.connect() as conn:
+                with db.connect(claims["tenant_id"]) as conn:
                     export_tax_run(conn, run_id, output, signing_secret=signing_secret,
                                    key_id="flagship-api-signing-v1", tenant_id=claims["tenant_id"],
                                    signing_private_key_pem=evidence_signing_private_key_pem)
@@ -250,21 +252,25 @@ def create_app(
 
     @app.post("/reg/documents", status_code=201)
     def add_reg_document(request: RegulationDocumentIn, claims: dict = Depends(can_analyze)):
+        authorize_resource(claims, "reg_document", request.document_key, "write")
         reg = RegIntelService(db, claims["tenant_id"])
         return {"version_hash": reg.add_document(**request.model_dump()), "actor": claims["sub"]}
 
     @app.post("/reg/answer")
     def answer_reg(request: QueryIn, claims: dict = Depends(can_view)):
+        authorize_resource(claims, "reg_corpus", "documents", "read")
         reg = RegIntelService(db, claims["tenant_id"])
         return reg.answer(request.query)
 
     @app.post("/controls/events", status_code=201)
     def add_control_event(request: ControlEventIn, claims: dict = Depends(can_analyze)):
+        authorize_resource(claims, "control_event", request.event_id, "write")
         controls = ControlPulseService(db, claims["tenant_id"])
         return {"cases": controls.ingest_and_evaluate(ControlEvent(**request.model_dump())), "actor": claims["sub"]}
 
     @app.get("/controls/cases")
     def control_cases(claims: dict = Depends(can_review)):
+        authorize_resource(claims, "control_case", "*", "list")
         controls = ControlPulseService(db, claims["tenant_id"])
         return controls.open_cases()
 
@@ -272,6 +278,7 @@ def create_app(
     def transition_control_case(
         case_id: int, request: ControlTransitionIn, claims: dict = Depends(can_review)
     ):
+        authorize_resource(claims, "control_case", str(case_id), "transition")
         controls = ControlPulseService(db, claims["tenant_id"])
         try:
             return controls.transition_case(case_id, claims["sub"], request.to_status, request.reason)
@@ -280,34 +287,40 @@ def create_app(
 
     @app.get("/controls/cases/{case_id}/history")
     def control_case_history(case_id: int, claims: dict = Depends(can_review)):
+        authorize_resource(claims, "control_case", str(case_id), "read")
         controls = ControlPulseService(db, claims["tenant_id"])
         return controls.case_history(case_id)
 
     @app.post("/graph/entities", status_code=201)
     def add_entities(items: list[EntityIn], claims: dict = Depends(can_analyze)):
+        authorize_resource(claims, "risk_graph", "entities", "write")
         graph = RiskGraphService(db, claims["tenant_id"])
         graph.add_entities([Entity(**item.model_dump()) for item in items])
         return {"upserted": len(items), "actor": claims["sub"]}
 
     @app.post("/graph/edges", status_code=201)
     def add_edges(items: list[EdgeIn], claims: dict = Depends(can_analyze)):
+        authorize_resource(claims, "risk_graph", "edges", "write")
         graph = RiskGraphService(db, claims["tenant_id"])
         graph.add_edges([Edge(**item.model_dump()) for item in items])
         return {"inserted": len(items), "actor": claims["sub"]}
 
     @app.get("/graph/findings")
     def graph_findings(claims: dict = Depends(can_view)):
+        authorize_resource(claims, "risk_graph", "findings", "read")
         graph = RiskGraphService(db, claims["tenant_id"])
         return graph.investigate()
 
     @app.get("/audit/verify")
     def audit_verify(claims: dict = Depends(can_review)):
-        with db.connect() as conn:
+        authorize_resource(claims, "audit_chain", claims["tenant_id"], "verify")
+        with db.connect(claims["tenant_id"]) as conn:
             valid, count, broken = verify_audit_chain(conn, claims["tenant_id"])
         return {"valid": valid, "events": count, "broken_hash": broken}
 
     @app.get("/admin/config-check")
     def config_check(claims: dict = Depends(admin_only)):
+        authorize_resource(claims, "platform_config", "runtime", "read")
         return {
             "jwt_secret_configured": True,
             "evidence_signing_key_separated": evidence_signing_secret is not None and signing_secret != jwt_secret,
