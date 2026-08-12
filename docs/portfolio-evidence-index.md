@@ -8,11 +8,11 @@
 
 | 方向 | 已完成成果 | 可核验结果 | 主要证据 |
 |---|---|---|---|
-| TaxFlow Nexus | 版本化税务规则 DSL、四眼复核、审计哈希链、HMAC签名证据 ZIP | 10 万条合成交易端到端吞吐 43,324.53 条/秒；未批准运行禁止导出 | `benchmark-2026-08-11-phase2.md`、`phase3-governance-evidence-2026-08-11.md` |
+| TaxFlow Nexus | Decimal 规则 DSL、租户隔离、幂等写入、四眼复核、审计链、Ed25519 签名证据 ZIP | 10 万条合成交易历史基准；未批准运行禁止导出；跨租户攻击测试通过 | `capability-evidence-matrix.md`、`benchmark-2026-08-11-phase2.md` |
 | RegIntel Copilot | 中英文法规切片、词项与字符 TF-IDF 混合检索、引用式回答和无证据拒答 | 12 条合成查询：Recall@3=1.0000、MRR=1.0000 | `analytics-evidence-2026-08-11.md` |
 | ControlPulse | JSONL事件流、幂等回放、篡改检测、受约束的缺陷整改生命周期 | 测试覆盖回放、非法跳转、责任人自关闭拒绝和转换审计 | `tests/test_analytics.py`、`tests/test_phase3_governance.py` |
 | RiskGraph Investigator | NetworkX图特征、时间切分、实体隔离验证、PSI漂移、模型卡 | 标准PR-AUC 0.862674；实体隔离PR-AUC 0.869943；299/101实体零交叉 | `phase3-governance-evidence-2026-08-11.md`、`artifacts/risk-model-v1/` |
-| 工程化底座 | FastAPI/OpenAPI、JWT角色权限、SQLAlchemy模型、Alembic、React/Vite演示端 | 20项测试通过；SQLite与PostgreSQL 18.3迁移往返通过；前端生产构建通过 | `deployment-evidence-2026-08-11.md` |
+| 工程化底座 | FastAPI/OpenAPI、OIDC/JWKS、SQLAlchemy、Alembic、PostgreSQL、事务 Outbox、React/Vite 工作台、非 root 容器 | 30 项本地测试通过；GitHub backend/frontend/PostgreSQL/container 检查通过 | `capability-evidence-matrix.md`、PR #2 CI |
 
 ## 复核命令
 

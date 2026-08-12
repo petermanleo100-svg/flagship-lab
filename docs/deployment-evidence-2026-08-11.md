@@ -10,7 +10,7 @@
 - 降级：除Alembic版本管理外业务表数量为0。
 - 再升级：成功恢复至head。
 
-SQLite完成`head → 0001 → head → base`迁移往返并加入自动化测试；此前首版迁移已在本机PostgreSQL 18.3执行。Phase 3增量迁移尚未另行在PostgreSQL复测，不代表高可用、备份恢复或生产负载验证。
+历史迁移已经冻结；自动化覆盖空库升级与从 `20260811_0002` 带数据升级。GitHub CI 在 PostgreSQL 17 上执行 `alembic upgrade head` 后运行租户、Decimal 与审计链集成测试。该证据不代表高可用、备份恢复或生产负载验证。
 
 ## React生产构建与页面检查
 

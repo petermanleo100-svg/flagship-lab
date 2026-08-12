@@ -16,6 +16,35 @@ jobs:
       - run: python -m pip install -e ".[test]"
       - run: pytest -q
 
+  postgres:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_USER: flagship
+          POSTGRES_PASSWORD: flagship-ci-password
+          POSTGRES_DB: flagship
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U flagship -d flagship"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      FLAGSHIP_TEST_POSTGRES_URL: postgresql+psycopg://flagship:flagship-ci-password@127.0.0.1:5432/flagship
+      FLAGSHIP_DATABASE_URL: postgresql+psycopg://flagship:flagship-ci-password@127.0.0.1:5432/flagship
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: python -m pip install -e ".[test]"
+      - run: alembic upgrade head
+      - run: pytest -q tests/test_postgres.py
+
   frontend:
     runs-on: ubuntu-latest
     defaults:
@@ -33,4 +62,11 @@ jobs:
           cache-dependency-path: frontend/pnpm-lock.yaml
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
+
+  container:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - run: docker build --tag flagship-lab:ci .
+      - run: docker inspect flagship-lab:ci --format '{{.Config.User}}' | grep -Fx flagship
 

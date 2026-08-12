@@ -26,14 +26,14 @@ SQLite + append-only hash-chained audit_events
 - RiskGraph 发现同时返回风险代码、分数、实体、解释和证据。
 - CLI、JSON HTTP API、单元测试和可复现基准命令。
 - FastAPI应用工厂、OpenAPI、Pydantic输入边界和统一HTTP状态码。
-- HS256 JWT角色权限：读取、分析、复核和管理员操作分离。
+- 生产 OIDC/JWKS（RS256/ES256）与本地开发 HS256 JWT；读取、分析、复核和管理员操作分离，并绑定租户声明。
 - TaxFlow JSON规则DSL；规则包版本与内容哈希进入审计事件。
 - 证据ZIP包含运行、发现与审计事件，清单使用SHA-256逐文件校验并检测篡改。
 - RegIntel融合词项检索与字符TF-IDF余弦相似度，并提供Recall@K/MRR评测器。
 - RiskGraph使用NetworkX生成图特征，按月份严格划分训练/测试并输出模型卡。
 - ControlPulse提供带偏移量和哈希链的JSONL事件流、原子检查点、幂等消费及回放。
 - TaxFlow运行工作流强制发起人与复核人分离；只有`APPROVED`运行可以导出签名证据。
-- 证据清单在逐文件SHA-256和清单哈希之外增加HMAC-SHA256认证，并保留可轮换`key_id`。
+- 证据清单在逐文件 SHA-256 和清单哈希之外支持 Ed25519 非对称签名与公钥验签；HMAC-SHA256 仅为兼容路径。
 - ControlPulse缺陷状态机拒绝非法跳转与责任人自关闭，转换历史同时进入审计哈希链。
 - RiskGraph除时间外留出外，增加实体隔离留出和逐特征PSI漂移报告，避免同一实体跨集合泄漏。
 

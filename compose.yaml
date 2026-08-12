@@ -1,0 +1,43 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: flagship
+      POSTGRES_USER: flagship
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+    volumes: [postgres_data:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U flagship -d flagship"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  migrate:
+    build: .
+    entrypoint: ["alembic"]
+    command: ["upgrade", "head"]
+    environment:
+      FLAGSHIP_DATABASE_URL: postgresql+psycopg://flagship:${POSTGRES_PASSWORD}@postgres:5432/flagship
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  api:
+    build: .
+    environment:
+      FLAGSHIP_DATABASE_URL: postgresql+psycopg://flagship:${POSTGRES_PASSWORD}@postgres:5432/flagship
+      FLAGSHIP_JWT_SECRET: ${FLAGSHIP_JWT_SECRET:?set FLAGSHIP_JWT_SECRET for local compose}
+    ports: ["8000:8000"]
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    read_only: true
+    tmpfs: [/tmp]
+    volumes: [evidence_data:/app/work/evidence]
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: ["ALL"]
+
+volumes:
+  postgres_data:
+  evidence_data:
