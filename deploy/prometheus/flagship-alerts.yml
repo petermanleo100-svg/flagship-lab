@@ -22,7 +22,7 @@ groups:
         labels: {severity: critical, service: flagship-lab, owner: platform-operations}
         annotations: {summary: "Flagship scheduled operation failed", runbook_url: "https://github.com/petermanleo100-svg/flagship-lab/blob/main/docs/production-runbook.md"}
       - alert: FlagshipBackupStale
-        expr: time() - flagship_operation_last_success_timestamp_seconds{operation="backup_create"} > 900
+        expr: (time() - flagship_operation_last_success_timestamp_seconds{operation="backup_create"} > 900) or absent(flagship_operation_last_success_timestamp_seconds{operation="backup_create"})
         for: 5m
         labels: {severity: critical, service: flagship-lab, owner: platform-operations}
         annotations: {summary: "Flagship has no successful backup inside the 15-minute RPO window", runbook_url: "https://github.com/petermanleo100-svg/flagship-lab/blob/main/docs/production-runbook.md"}
