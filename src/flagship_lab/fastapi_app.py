@@ -1,19 +1,21 @@
 from __future__ import annotations
 
 from decimal import Decimal
+import logging
 from pathlib import Path
 from time import perf_counter
 from typing import Any
 from uuid import uuid4
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, PlainTextResponse
 from pydantic import BaseModel, Field
 
 from .auth import HMACTokenVerifier, TokenVerifier, issue_token, require_verified_roles
 from .controlpulse import ControlEvent, ControlPulseService
 from .core import Database, database_health, verify_audit_chain
 from .evidence import export_tax_run
+from .observability import Metrics
 from .regintel import RegIntelService
 from .riskgraph import Edge, Entity, RiskGraphService
 from .taxflow import TaxFlowService, TaxTransaction
@@ -98,14 +100,18 @@ def create_app(
     evidence_signing_secret: str | None = None,
     token_verifier: TokenVerifier | None = None,
     evidence_signing_private_key_pem: str | bytes | None = None,
+    initialize_schema: bool = True,
 ) -> FastAPI:
     if len(jwt_secret) < 32:
         raise ValueError("jwt_secret must contain at least 32 characters")
     signing_secret = evidence_signing_secret or jwt_secret
     if len(signing_secret) < 32:
         raise ValueError("evidence_signing_secret must contain at least 32 characters")
-    db = Database(db_path)
-    db.initialize()
+    db = Database(db_path, create_schema=initialize_schema)
+    if initialize_schema:
+        db.initialize()
+    metrics = Metrics()
+    logger = logging.getLogger("flagship.request")
     verifier = token_verifier or HMACTokenVerifier(jwt_secret)
     can_view = require_verified_roles(verifier, "viewer", "analyst", "reviewer", "admin")
     can_analyze = require_verified_roles(verifier, "analyst", "admin")
@@ -123,9 +129,22 @@ def create_app(
         request_id = request.headers.get("X-Request-ID") or uuid4().hex
         started = perf_counter()
         response = await call_next(request)
+        duration = perf_counter() - started
         response.headers["X-Request-ID"] = request_id
-        response.headers["Server-Timing"] = f"app;dur={(perf_counter() - started) * 1000:.2f}"
+        response.headers["Server-Timing"] = f"app;dur={duration * 1000:.2f}"
+        response.headers["X-Content-Type-Options"] = "nosniff"
+        response.headers["X-Frame-Options"] = "DENY"
+        response.headers["Referrer-Policy"] = "no-referrer"
+        response.headers["Cache-Control"] = "no-store"
+        metrics.observe_request(request.method, request.url.path, response.status_code, duration)
+        logger.info("request_complete", extra={"request_id": request_id, "method": request.method,
+                    "path": request.url.path, "status_code": response.status_code,
+                    "duration_ms": round(duration * 1000, 3)})
         return response
+
+    @app.get("/metrics", response_class=PlainTextResponse, include_in_schema=False)
+    def prometheus_metrics():
+        return metrics.render()
 
     @app.get("/health/live")
     def liveness():

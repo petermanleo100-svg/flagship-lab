@@ -14,13 +14,14 @@ This file is the release truth source. A capability may be described as **implem
 | OIDC/JWKS and RBAC authentication | Implemented with limitation | pluggable verifier; RS256/ES256 JWKS, issuer/audience/expiry/role/tenant validation; HS256 dev mode | API RBAC tests and `test_oidc_auth.py` | Provider discovery/group mapping and key-rotation integration test remain deployment work |
 | Regulation retrieval | Implemented | versioned corpus, lexical + char-TFIDF retrieval, refusal and citations | analytics evaluation tests | Distributed vector index and ingestion crawler are roadmap |
 | Risk graph explainability | Implemented | tenant graph persistence, shared-account and 3-cycle rules | graph tests | Large-graph engine and analyst case workflow are roadmap |
-| Liveness/readiness | Implemented | separate live and DB-backed ready endpoints | readiness test | Metrics/traces/alerts are roadmap |
+| Liveness/readiness/metrics | Implemented with limitation | separate probes, bounded-label Prometheus counters/durations, security headers | readiness and observability tests | Distributed traces, dashboards and SLO alerts are roadmap |
 | PostgreSQL runtime CI | Implemented | SQLAlchemy models, psycopg runtime and dedicated service job | `test_postgres_runtime_decimal_tenant_and_audit`; GitHub CI PostgreSQL 17 | Migration-chain execution on PostgreSQL is added in the next hardening batch |
 | Idempotent tax writes | Implemented | transaction-scoped request hash and response record for ingest/rule-run endpoints | `test_tax_write_idempotency_replays_and_rejects_key_reuse` | Other write endpoints use natural keys or remain roadmap |
 | Resource ABAC beyond tenant scope | Roadmap | tenant boundary and roles only | tenant attack tests | entity-level grants and policy engine are not implemented |
 | Object storage, KMS signatures | Roadmap | none | none | local filesystem + HMAC only |
 | Broker-backed async workers | Roadmap | outbox persistence only | none | no publisher/consumer SLA |
-| OpenTelemetry and SLO alerts | Roadmap | request ID and Server-Timing only | header test | no collector/dashboard/alert rules |
+| OpenTelemetry and SLO alerts | Roadmap | request ID, structured log formatter, metrics and Server-Timing only | observability test | no trace exporter, collector, dashboard or alert rules |
+| Container deployment baseline | Implemented with limitation | non-root image, read-only API filesystem, dropped capabilities, migration gate, PostgreSQL health check | Dockerfile/Compose static review; CI image build pending | orchestration, backup/restore drill and secret manager integration remain deployment work |
 
 ## Release audit rules
 

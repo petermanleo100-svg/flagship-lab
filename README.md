@@ -1,30 +1,20 @@
 # Flagship Lab
 
-四个面向四大实习岗位的可审计软件工程项目。第三阶段已覆盖 FastAPI/OpenAPI、JWT角色权限、版本化规则DSL、四眼复核、HMAC签名证据包、混合检索、实体隔离风险验证和可重放控制事件流。
+面向税务科技、法规检索、IT 控制与关系风险调查的可审计工作流平台。项目以“代码、API、文档和自动化证据一致”为发布原则；准确能力边界以 [`docs/capability-evidence-matrix.md`](docs/capability-evidence-matrix.md) 为准。
 
-## 当前可运行模块
+## 已实现能力
 
-- **TaxFlow Nexus**：合成发票生成、批量入库、版本化税务规则、异常发现、哈希审计链。
-- **RegIntel Copilot**：法规文档版本化、中文/英文词项检索、带原文引用的证据型回答、无证据拒答。
-- **ControlPulse**：IT控制事件接入、策略即代码检测、控制缺陷案件、证据哈希。
-- **RiskGraph Investigator**：企业/账户交易图、共享账户与循环交易检测、可解释风险评分。
+- **TaxFlow Nexus**：Decimal/Numeric 财务精度、版本化规则包、异常发现、写请求幂等、四眼复核、租户隔离。
+- **RegIntel Copilot**：法规版本留存、词项与字符 TF-IDF 混合检索、引用回答、证据不足拒答和固定评测集。
+- **ControlPulse**：控制事件幂等接入、缺陷案例生命周期、四眼关闭、乐观并发控制和可追溯转换历史。
+- **RiskGraph Investigator**：租户级实体图、共享账户与三节点闭环检测、可解释证据。
+- **平台治理**：SQLAlchemy 单一运行路径、PostgreSQL CI、冻结的 Alembic 迁移链、租户哈希审计链、事务 Outbox 与重试发布器。
+- **安全与证据**：OIDC/JWKS 或本地开发 JWT、角色权限、Ed25519 公钥可验签证据包、请求追踪、安全响应头。
+- **运维接口**：`/health/live`、数据库就绪探针 `/health/ready`、Prometheus 文本指标 `/metrics`。
 
-新增可核验能力：
+本仓库不会把路线图当作现有功能。对象锁定存储、KMS 密钥托管、完整资源级 ABAC、生产消息代理适配器、OpenTelemetry collector 与大图数据库仍在能力矩阵中标为限制或路线图。
 
-- RegIntel：词项分数与字符TF-IDF混合排序，固定评测集输出Recall@K和MRR。
-- RiskGraph：NetworkX图特征、严格月份切分、随机森林基线、模型卡和模型制品。
-- ControlPulse：JSONL追加式事件流、偏移量、流哈希链、检查点、幂等消费和回放。
-
-## 快速开始
-
-```powershell
-$env:PYTHONPATH="src"
-python -m flagship_lab.cli demo --db work/demo.db
-python -m unittest discover -s tests -v
-python -m flagship_lab.cli serve --db work/server.db --port 8080
-```
-
-第三阶段 FastAPI：
+## 本地开发
 
 ```powershell
 python -m pip install -e ".[test]"
@@ -32,48 +22,46 @@ $env:FLAGSHIP_JWT_SECRET="replace-with-a-random-secret-of-at-least-32-characters
 python -m flagship_lab.cli api --db work/api.db --port 8000 --allow-dev-tokens
 ```
 
-浏览 `http://127.0.0.1:8000/docs` 查看 OpenAPI 交互文档。`--allow-dev-tokens` 仅供本地演示；默认关闭。
+打开 `http://127.0.0.1:8000/docs` 使用 OpenAPI 页面。`--allow-dev-tokens` 只能用于本地开发，生产环境必须关闭。
 
-生成更大规模的 TaxFlow 基准数据：
+运行验证：
 
 ```powershell
-$env:PYTHONPATH="src"
-python -m flagship_lab.cli benchmark --db work/benchmark.db --rows 100000
-python -m flagship_lab.cli reg-eval --db work/reg-eval.db --k 3
-python -m flagship_lab.cli risk-benchmark --entities 400 --months 12 --train-through 8 --output-dir artifacts/risk-model
-python -m flagship_lab.cli control-stream-demo --db work/control.db --stream work/events.jsonl --checkpoint work/checkpoint.json
+pytest -q
+$env:FLAGSHIP_DATABASE_URL="postgresql+psycopg://user:password@host:5432/flagship"
+alembic upgrade head
 ```
 
-服务启动后可访问 `GET /health`、`POST /tax/transactions`、`POST /tax/runs`、`POST /tax/runs/{run_id}/review`、`GET /evidence/tax/{run_id}`、`POST /reg/documents`、`POST /reg/answer`、`POST /controls/events`、`POST /controls/cases/{case_id}/transition`、`GET /controls/cases/{case_id}/history`、`POST /graph/entities`、`POST /graph/edges`、`GET /graph/findings` 和 `GET /audit/verify`。
+## 容器部署基线
 
-## 真实性规则
+```powershell
+$env:POSTGRES_PASSWORD="use-a-secret-manager-value"
+$env:FLAGSHIP_JWT_SECRET="local-compose-only-secret-at-least-32-characters"
+docker compose up --build
+```
 
-README 与简历中的性能、召回率等数字必须来自 `benchmark` 或测试输出。不应把未来规划当成已实现功能。
+容器以非 root 用户运行，API 文件系统只读、移除 Linux capabilities，并在 API 启动前执行迁移任务。生产部署应使用 OIDC/JWKS 和外部密钥管理，而不是 Compose 示例中的本地 JWT 密钥。
 
-第二阶段 DSL 实测：10万条合成交易端到端吞吐 `43,324.53 条/秒`；详细环境限制见 [`docs/benchmark-2026-08-11-phase2.md`](docs/benchmark-2026-08-11-phase2.md)。架构边界见 [`docs/architecture.md`](docs/architecture.md)，演示步骤见 [`docs/demo-guide.md`](docs/demo-guide.md)。
+OIDC 生产变量：
 
-## 已完成的第三阶段能力
+- `FLAGSHIP_OIDC_ISSUER`
+- `FLAGSHIP_OIDC_AUDIENCE`
+- `FLAGSHIP_OIDC_JWKS_URL`
+- `FLAGSHIP_EVIDENCE_PRIVATE_KEY_FILE`（挂载的 Ed25519 私钥；生产建议改为 KMS/HSM 适配器）
 
-1. FastAPI/OpenAPI 和 Pydantic 输入校验。
-2. HS256 JWT，包含 `viewer`、`analyst`、`reviewer`、`admin` 四类角色。
-3. 税务规则 JSON DSL、规则包版本与内容哈希。
-4. TaxFlow 四眼复核：发起人与复核人必须分离，只有已批准运行才能导出 HMAC-SHA256 签名证据包。
-5. ControlPulse 缺陷生命周期：`OPEN → IN_REVIEW → REMEDIATED → CLOSED`，非法跳转和责任人自关闭会被拒绝，全部转换进入审计链。
-6. RiskGraph 实体隔离时间外验证：299个训练实体与101个留出实体零交叉；同时输出8项特征PSI漂移报告。
-7. 20项自动化测试，覆盖401/403、请求追踪、四眼复核、签名校验、生命周期、事件回放、篡改检测和增量数据库迁移往返。
-8. RegIntel混合检索评测、RiskGraph时间切分/实体隔离双重验证和ControlPulse事件流回放。
+## API 主路径
 
-## 下一阶段
+- 税务：`POST /tax/transactions`、`POST /tax/runs`、`POST /tax/runs/{run_id}/review`、`GET /tax/findings`
+- 证据：`GET /evidence/tax/{run_id}`
+- 法规：`POST /reg/documents`、`POST /reg/answer`
+- 控制：`POST /controls/events`、`GET /controls/cases`、案例转换与历史接口
+- 图谱：`POST /graph/entities`、`POST /graph/edges`、`GET /graph/findings`
+- 治理：`GET /audit/verify`、健康探针与指标接口
 
-1. 增加刷新令牌、HMAC密钥轮换、用户目录和更细粒度资源权限。
-2. TaxFlow 增加字段级血缘，并把当前HMAC签名升级为KMS托管的非对称签名。
-3. RegIntel将当前词项+字符TF-IDF升级为BM25+embedding+rereanker，并扩展公开数据评测集。
-4. ControlPulse将JSONL适配器升级为Redpanda/Kafka、OPA和对象存储证据湖。
-5. RiskGraph增加SHAP、对抗漂移测试和Neo4j适配。
-6. 增加 OpenTelemetry 可观测性，并把当前 React 演示端扩展为完整管理工作台。
+税务导入与规则运行支持 `Idempotency-Key` 请求头。同一个租户和操作内，相同键与相同请求会重放原结果；同一个键配不同请求会返回冲突。
 
-## 部署与演示证据
+## 验证与真实性
 
-- Alembic首版迁移已在SQLite和本机PostgreSQL 18.3完成升级、降级、再升级验证。
-- React/Vite演示端已完成生产构建与浏览器检查；详见[`docs/deployment-evidence-2026-08-11.md`](docs/deployment-evidence-2026-08-11.md)。
-- 基准、模型制品、测试和诚信表述汇总见[`docs/portfolio-evidence-index.md`](docs/portfolio-evidence-index.md)。
+CI 包含 Python 全量测试、PostgreSQL 17 真实服务测试和 React 构建。迁移测试覆盖空库创建以及从 `20260811_0002` 带数据升级。性能数字只允许引用带环境说明的基准报告，不从合成数据推导生产 SLA 或真实风险识别效果。
+
+详细索引见 [`docs/portfolio-evidence-index.md`](docs/portfolio-evidence-index.md)。

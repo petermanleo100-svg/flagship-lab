@@ -61,3 +61,10 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm build
 
+  container:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - run: docker build --tag flagship-lab:ci .
+      - run: docker inspect flagship-lab:ci --format '{{.Config.User}}' | grep -Fx flagship
+

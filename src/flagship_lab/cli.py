@@ -138,7 +138,8 @@ def main() -> None:
         private_key_pem = Path(private_key_path).read_bytes() if private_key_path else None
         uvicorn.run(
             create_app(os.environ.get("FLAGSHIP_DATABASE_URL", args.db), secret, args.allow_dev_tokens,
-                       signing_secret, verifier, private_key_pem),
+                       signing_secret, verifier, private_key_pem,
+                       initialize_schema=os.environ.get("FLAGSHIP_DATABASE_URL") is None),
             host=args.host,
             port=args.port,
         )
