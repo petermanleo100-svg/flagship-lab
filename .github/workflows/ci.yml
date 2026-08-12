@@ -86,12 +86,24 @@ jobs:
       - run: docker run --rm --entrypoint python flagship-lab:ci --version | grep -Fx 'Python 3.13.15'
       - run: docker inspect flagship-lab:ci --format '{{.Config.User}}' | grep -Fx flagship
       - name: Generate SPDX SBOM
+        id: sbom_primary
+        continue-on-error: true
         uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610
         with:
           image: flagship-lab:ci
           format: spdx-json
           output-file: flagship-lab-sbom.spdx.json
           upload-artifact: false
+      - name: Retry SPDX SBOM generation after transient download failure
+        if: steps.sbom_primary.outcome == 'failure'
+        uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610
+        with:
+          image: flagship-lab:ci
+          format: spdx-json
+          output-file: flagship-lab-sbom.spdx.json
+          upload-artifact: false
+      - name: Require generated SPDX SBOM
+        run: test -s flagship-lab-sbom.spdx.json
       - name: Validate time-bounded vulnerability exceptions
         run: python scripts/verify_vulnerability_exceptions.py
       - name: Block fixable High and Critical vulnerabilities
