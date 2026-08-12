@@ -140,6 +140,58 @@ class TaxFlowService:
             )
         return {"run_id": run_id, "rule_version": effective_version, "transactions": len(rows), "findings": len(findings), "rule_pack_hash": sha256_json(pack)}
 
+    def request_review(self, run_id: str, requested_by: str) -> dict:
+        if not requested_by.strip():
+            raise ValueError("requested_by is required")
+        with self.db.connect() as conn:
+            run = conn.execute("SELECT run_id FROM tax_rule_runs WHERE run_id=?", (run_id,)).fetchone()
+            if run is None:
+                raise ValueError("unknown run_id")
+            conn.execute(
+                """INSERT INTO tax_run_workflow(run_id,requested_by,status)
+                   VALUES (?,?, 'PENDING_REVIEW')
+                   ON CONFLICT(run_id) DO NOTHING""",
+                (run_id, requested_by),
+            )
+            workflow = dict(conn.execute("SELECT * FROM tax_run_workflow WHERE run_id=?", (run_id,)).fetchone())
+            append_audit_event(conn, "taxflow", "REVIEW_REQUESTED", run_id, {"requested_by": requested_by})
+        return workflow
+
+    def review_run(self, run_id: str, reviewer: str, decision: str, comment: str) -> dict:
+        normalized = decision.upper()
+        if normalized not in {"APPROVE", "REJECT"}:
+            raise ValueError("decision must be APPROVE or REJECT")
+        if not comment.strip():
+            raise ValueError("review comment is required")
+        with self.db.connect() as conn:
+            row = conn.execute("SELECT * FROM tax_run_workflow WHERE run_id=?", (run_id,)).fetchone()
+            if row is None:
+                raise ValueError("review was not requested")
+            if row["status"] != "PENDING_REVIEW":
+                raise ValueError("review is already final")
+            if row["requested_by"] == reviewer:
+                raise ValueError("four-eyes control requires an independent reviewer")
+            status = "APPROVED" if normalized == "APPROVE" else "REJECTED"
+            reviewed_at = utc_now()
+            conn.execute(
+                """UPDATE tax_run_workflow
+                   SET status=?,reviewed_by=?,reviewed_at=?,decision_comment=? WHERE run_id=?""",
+                (status, reviewer, reviewed_at, comment, run_id),
+            )
+            append_audit_event(
+                conn,
+                "taxflow",
+                "REVIEW_DECIDED",
+                run_id,
+                {"status": status, "reviewed_by": reviewer, "comment": comment},
+            )
+            return dict(conn.execute("SELECT * FROM tax_run_workflow WHERE run_id=?", (run_id,)).fetchone())
+
+    def workflow(self, run_id: str) -> dict | None:
+        with self.db.connect() as conn:
+            row = conn.execute("SELECT * FROM tax_run_workflow WHERE run_id=?", (run_id,)).fetchone()
+            return dict(row) if row else None
+
     @staticmethod
     def _evaluate_row(row: sqlite3.Row, duplicate_ids: set[str], pack: dict) -> list[Finding]:
         result: list[Finding] = []

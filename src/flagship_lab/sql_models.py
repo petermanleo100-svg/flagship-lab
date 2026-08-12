@@ -57,6 +57,16 @@ class TaxFinding(Base):
     evidence_json: Mapped[str] = mapped_column(Text, nullable=False)
 
 
+class TaxRunWorkflow(Base):
+    __tablename__ = "tax_run_workflow"
+    run_id: Mapped[str] = mapped_column(ForeignKey("tax_rule_runs.run_id"), primary_key=True)
+    requested_by: Mapped[str] = mapped_column(String(100), nullable=False)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="PENDING_REVIEW")
+    reviewed_by: Mapped[str | None] = mapped_column(String(100))
+    reviewed_at: Mapped[str | None] = mapped_column(String(40))
+    decision_comment: Mapped[str | None] = mapped_column(Text)
+
+
 class RegulationDocument(Base):
     __tablename__ = "regulation_documents"
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
@@ -95,6 +105,17 @@ class ControlCase(Base):
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="OPEN")
 
 
+class ControlCaseTransition(Base):
+    __tablename__ = "control_case_transitions"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    case_id: Mapped[int] = mapped_column(ForeignKey("control_cases.id"), nullable=False, index=True)
+    from_status: Mapped[str] = mapped_column(String(20), nullable=False)
+    to_status: Mapped[str] = mapped_column(String(20), nullable=False)
+    actor: Mapped[str] = mapped_column(String(100), nullable=False)
+    reason: Mapped[str] = mapped_column(Text, nullable=False)
+    occurred_at: Mapped[str] = mapped_column(String(40), nullable=False)
+
+
 class GraphEntity(Base):
     __tablename__ = "graph_entities"
     entity_id: Mapped[str] = mapped_column(String(100), primary_key=True)
@@ -111,4 +132,3 @@ class GraphEdge(Base):
     amount: Mapped[float] = mapped_column(Float, nullable=False, default=0)
     occurred_at: Mapped[str] = mapped_column(String(40), nullable=False)
     evidence_json: Mapped[str] = mapped_column(Text, nullable=False)
-

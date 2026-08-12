@@ -14,8 +14,22 @@ def test_alembic_sqlite_upgrade_downgrade_roundtrip(tmp_path):
     command.upgrade(config, "head")
     engine = create_engine(f"sqlite:///{database.as_posix()}")
     tables = set(inspect(engine).get_table_names())
-    assert {"audit_events", "tax_transactions", "regulation_documents", "control_events", "graph_entities"} <= tables
+    assert {
+        "audit_events",
+        "tax_transactions",
+        "tax_run_workflow",
+        "regulation_documents",
+        "control_events",
+        "control_case_transitions",
+        "graph_entities",
+    } <= tables
+    command.downgrade(config, "20260811_0001")
+    phase2_tables = set(inspect(engine).get_table_names())
+    assert "tax_run_workflow" not in phase2_tables
+    assert "control_case_transitions" not in phase2_tables
+    command.upgrade(config, "head")
+    upgraded_again = set(inspect(engine).get_table_names())
+    assert {"tax_run_workflow", "control_case_transitions"} <= upgraded_again
     command.downgrade(config, "base")
     remaining = set(inspect(engine).get_table_names())
     assert remaining <= {"alembic_version"}
-

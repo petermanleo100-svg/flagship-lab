@@ -55,5 +55,32 @@
     "训练和测试数据均为固定规则生成的合成图，指标不能代表真实舞弊识别效果。",
     "标签由潜在风险和少量噪声生成，仍可能存在生成机制带来的可分性偏高。",
     "时间切分防止使用未来月份训练，但同一实体可跨月出现。"
-  ]
+  ],
+  "entity_holdout_validation": {
+    "protocol": "entity-disjoint temporal holdout/v1",
+    "seed": 20260811,
+    "holdout_fraction": 0.25,
+    "train_rows": 2392,
+    "test_rows": 404,
+    "train_entities": 299,
+    "test_entities": 101,
+    "entity_leakage_count": 0,
+    "average_precision": 0.869943,
+    "roc_auc": 0.894092,
+    "feature_drift_psi": [
+      {"feature": "night_activity_ratio", "psi": 0.05444},
+      {"feature": "pagerank", "psi": 0.01946},
+      {"feature": "in_degree", "psi": 0.015592},
+      {"feature": "weighted_out", "psi": 0.007998},
+      {"feature": "out_degree", "psi": 0.006005},
+      {"feature": "unique_counterparties", "psi": 0.006005},
+      {"feature": "shared_account_count", "psi": 0.000025},
+      {"feature": "three_cycle_count", "psi": 0.0}
+    ],
+    "high_drift_features": [],
+    "limitations": [
+      "实体隔离降低了同一主体跨月份泄漏，但数据仍为固定种子生成的合成图。",
+      "PSI仅用于数据分布监测，不证明因果关系或真实业务稳定性。"
+    ]
+  }
 }

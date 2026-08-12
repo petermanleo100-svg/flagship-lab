@@ -8,11 +8,11 @@
 
 | 方向 | 已完成成果 | 可核验结果 | 主要证据 |
 |---|---|---|---|
-| TaxFlow Nexus | 版本化税务规则 DSL、批量处理、审计哈希链、可验证证据 ZIP | 10 万条合成交易端到端吞吐 43,324.53 条/秒 | `benchmark-2026-08-11-phase2.md` |
+| TaxFlow Nexus | 版本化税务规则 DSL、四眼复核、审计哈希链、HMAC签名证据 ZIP | 10 万条合成交易端到端吞吐 43,324.53 条/秒；未批准运行禁止导出 | `benchmark-2026-08-11-phase2.md`、`phase3-governance-evidence-2026-08-11.md` |
 | RegIntel Copilot | 中英文法规切片、词项与字符 TF-IDF 混合检索、引用式回答和无证据拒答 | 12 条合成查询：Recall@3=1.0000、MRR=1.0000 | `analytics-evidence-2026-08-11.md` |
-| ControlPulse | JSONL 追加事件流、偏移量、检查点、幂等回放、哈希链篡改检测 | 自动化测试覆盖回放、重复消费和篡改检测 | `tests/test_analytics.py`、`tests/test_phase2.py` |
-| RiskGraph Investigator | NetworkX 图特征、严格时间切分、随机森林基线、模型卡和制品 | 测试集 1,600 行；PR-AUC 0.862674、ROC-AUC 0.922464、Recall@Top5%=0.837209 | `analytics-evidence-2026-08-11.md`、`artifacts/risk-model-v1/` |
-| 工程化底座 | FastAPI/OpenAPI、JWT 角色权限、SQLAlchemy 模型、Alembic、React/Vite 演示端 | 16 项测试通过；SQLite 与 PostgreSQL 18.3 迁移往返通过；前端生产构建通过 | `deployment-evidence-2026-08-11.md` |
+| ControlPulse | JSONL事件流、幂等回放、篡改检测、受约束的缺陷整改生命周期 | 测试覆盖回放、非法跳转、责任人自关闭拒绝和转换审计 | `tests/test_analytics.py`、`tests/test_phase3_governance.py` |
+| RiskGraph Investigator | NetworkX图特征、时间切分、实体隔离验证、PSI漂移、模型卡 | 标准PR-AUC 0.862674；实体隔离PR-AUC 0.869943；299/101实体零交叉 | `phase3-governance-evidence-2026-08-11.md`、`artifacts/risk-model-v1/` |
+| 工程化底座 | FastAPI/OpenAPI、JWT角色权限、SQLAlchemy模型、Alembic、React/Vite演示端 | 20项测试通过；SQLite与PostgreSQL 18.3迁移往返通过；前端生产构建通过 | `deployment-evidence-2026-08-11.md` |
 
 ## 复核命令
 
@@ -45,10 +45,10 @@ PostgreSQL 环境需通过 `FLAGSHIP_DATABASE_URL` 或 Alembic 的 `sqlalchemy.u
 | 文件 | SHA-256 |
 |---|---|
 | `artifacts/risk-model-v1/riskgraph-baseline.joblib` | `dcbf90d0c4ba3f55fe4198053a40b32361b2c22eec394df7bad37a1adb12ecef` |
-| `artifacts/risk-model-v1/riskgraph-model-card.json` | `aebd45cd766481da265c34cd2d14c12028444e593726d9f15b9c7458bac46a75` |
-| `artifacts/risk-model-v1/manifest.json` | `4df96f0c8d2c0c56f82d346c6887551117e7d977aa84e380df2c35db3cf7f5d0` |
-| `frontend/dist/index.html` | `16339b38dfc01047a48154db2778144a4ff24f575f1627f9fa705ebebea87d04` |
-| `frontend/dist/assets/index-BqxOcETD.js` | `90771217e8755fc0b5cbd57dff12429d9c791d5a9273dc7af3a4f89a666f7222` |
+| `artifacts/risk-model-v1/riskgraph-model-card.json` | `ca616ec55e4c1518cd8041d5d6a8769aa7a13a7547540e01569c9664b8d4052d` |
+| `artifacts/risk-model-v1/manifest.json` | `183266382bb3319ebac30867ae47cfb2c62f4e86c204eeaf06443def82f5e9a2` |
+| `frontend/dist/index.html` | `7bbda52daa013e598fe18983350a436c25646c4d7df182c49a11604e6d6c9402` |
+| `frontend/dist/assets/index-BG4Dn2YI.js` | `7cf4320ee43cb1462cca792b7002e9c401d560d367019e7735c0827d76dcd756` |
 | `frontend/dist/assets/index-Cx4CTLTD.css` | `d390e104367e36bdff844be8cdbb8e9f62acffc5b1e37a4b158e6b51d035519b` |
 
 ## 投递时可使用的诚信表述
