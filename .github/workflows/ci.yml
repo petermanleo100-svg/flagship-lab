@@ -15,6 +15,9 @@ jobs:
           cache: pip
       - run: python -m pip install -e ".[test]"
       - run: pytest -q
+      - run: python -m pip check
+      - name: Audit Python dependency vulnerabilities
+        run: python scripts/verify_dependency_manifest.py && pip-audit -r requirements-audit.txt
       - name: Validate Prometheus alert rules
         run: docker run --rm --entrypoint /bin/promtool -v "$PWD/deploy/prometheus:/rules:ro" prom/prometheus:v3.11.3 check rules /rules/flagship-alerts.yml
 
@@ -78,6 +81,7 @@ jobs:
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
       - run: docker build --tag flagship-lab:ci .
+      - run: docker run --rm --entrypoint python flagship-lab:ci --version | grep -Fx 'Python 3.13.15'
       - run: docker inspect flagship-lab:ci --format '{{.Config.User}}' | grep -Fx flagship
       - name: Generate SPDX SBOM
         uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610
@@ -86,14 +90,17 @@ jobs:
           format: spdx-json
           output-file: flagship-lab-sbom.spdx.json
           upload-artifact: false
-      - name: Block fixed critical vulnerabilities
+      - name: Validate time-bounded vulnerability exceptions
+        run: python scripts/verify_vulnerability_exceptions.py
+      - name: Block fixable High and Critical vulnerabilities
         uses: anchore/scan-action@e1165082ffb1fe366ebaf02d8526e7c4989ea9d2
         with:
           sbom: flagship-lab-sbom.spdx.json
           fail-build: true
-          severity-cutoff: critical
+          severity-cutoff: high
           only-fixed: true
           output-format: table
+          config: .grype.yaml
       - name: Upload SBOM evidence
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:

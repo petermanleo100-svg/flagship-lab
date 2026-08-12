@@ -1,0 +1,9 @@
+{
+  "ignore": [
+    {
+      "vulnerability": "CVE-2026-15308",
+      "package": {"name": "python", "version": "3.13.15"},
+      "reason": "Time-bounded VEX: service does not import html.parser or parse untrusted HTML; tracked in security/vulnerability-exceptions.json"
+    }
+  ]
+}
