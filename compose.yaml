@@ -1,13 +1,17 @@
 services:
   postgres:
-    image: postgres:17-alpine
+    image: postgres:17.6-alpine
     environment:
       POSTGRES_DB: flagship
-      POSTGRES_USER: flagship
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
-    volumes: [postgres_data:/var/lib/postgresql/data]
+      POSTGRES_USER: flagship_owner
+      POSTGRES_PASSWORD: ${POSTGRES_OWNER_PASSWORD:?set POSTGRES_OWNER_PASSWORD}
+      APP_DB_USER: flagship_app
+      APP_DB_PASSWORD: ${POSTGRES_APP_PASSWORD:?set POSTGRES_APP_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./deploy/postgres/init-runtime-role.sh:/docker-entrypoint-initdb.d/10-runtime-role.sh:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U flagship -d flagship"]
+      test: ["CMD-SHELL", "pg_isready -U flagship_owner -d flagship"]
       interval: 5s
       timeout: 5s
       retries: 12
@@ -17,22 +21,34 @@ services:
     entrypoint: ["alembic"]
     command: ["upgrade", "head"]
     environment:
-      FLAGSHIP_DATABASE_URL: postgresql+psycopg://flagship:${POSTGRES_PASSWORD}@postgres:5432/flagship
+      FLAGSHIP_DATABASE_URL: postgresql+psycopg://flagship_owner:${POSTGRES_OWNER_PASSWORD}@postgres:5432/flagship
     depends_on:
       postgres:
         condition: service_healthy
+    read_only: true
+    tmpfs: [/tmp]
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: ["ALL"]
     restart: "no"
 
   api:
     build: .
     environment:
-      FLAGSHIP_DATABASE_URL: postgresql+psycopg://flagship:${POSTGRES_PASSWORD}@postgres:5432/flagship
-      FLAGSHIP_JWT_SECRET: ${FLAGSHIP_JWT_SECRET:?set FLAGSHIP_JWT_SECRET for local compose}
+      FLAGSHIP_DATABASE_URL: postgresql+psycopg://flagship_app:${POSTGRES_APP_PASSWORD}@postgres:5432/flagship
+      FLAGSHIP_OIDC_ISSUER: ${FLAGSHIP_OIDC_ISSUER:?set OIDC issuer}
+      FLAGSHIP_OIDC_AUDIENCE: ${FLAGSHIP_OIDC_AUDIENCE:-flagship-lab}
+      FLAGSHIP_OIDC_JWKS_URL: ${FLAGSHIP_OIDC_JWKS_URL:?set OIDC JWKS URL}
+      FLAGSHIP_BACKUP_KEY_BASE64: ${FLAGSHIP_BACKUP_KEY_BASE64:?set base64 32-byte backup key}
+      FLAGSHIP_ALLOW_DEV_TOKENS: "false"
       OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: http://otel-collector:4318/v1/traces
-    ports: ["8000:8000"]
+    entrypoint: ["sh", "-c"]
+    command: ["flagship-operations preflight && exec python -m flagship_lab.cli api --host 0.0.0.0 --port 8000"]
+    ports: ["127.0.0.1:8000:8000"]
     depends_on:
       migrate:
         condition: service_completed_successfully
+      otel-collector:
+        condition: service_started
     read_only: true
     tmpfs: [/tmp]
     volumes: [evidence_data:/app/work/evidence]
@@ -44,8 +60,8 @@ services:
     build: .
     entrypoint: ["flagship-worker"]
     environment:
-      FLAGSHIP_DATABASE_URL: postgresql+psycopg://flagship:${POSTGRES_PASSWORD}@postgres:5432/flagship
-      FLAGSHIP_KAFKA_BOOTSTRAP_SERVERS: ${FLAGSHIP_KAFKA_BOOTSTRAP_SERVERS:?set broker endpoints}
+      FLAGSHIP_DATABASE_URL: postgresql+psycopg://flagship_app:${POSTGRES_APP_PASSWORD}@postgres:5432/flagship
+      FLAGSHIP_KAFKA_BOOTSTRAP_SERVERS: ${FLAGSHIP_KAFKA_BOOTSTRAP_SERVERS:-}
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -60,7 +76,7 @@ services:
     image: otel/opentelemetry-collector-contrib:0.142.0
     command: ["--config=/etc/otelcol/config.yaml"]
     volumes: ["./deploy/otel-collector.yaml:/etc/otelcol/config.yaml:ro"]
-    ports: ["4318:4318", "13133:13133"]
+    ports: ["127.0.0.1:4318:4318", "127.0.0.1:13133:13133"]
     read_only: true
     security_opt: ["no-new-privileges:true"]
     cap_drop: ["ALL"]

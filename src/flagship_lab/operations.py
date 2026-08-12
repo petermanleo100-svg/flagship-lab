@@ -13,6 +13,7 @@ from .backup import BackupService
 from .core import Database
 from .object_store import LocalWormObjectStore, StoredObject
 from .outbox import OutboxPublisher
+from .preflight import PreflightError,run_preflight
 from .sql_models import DeadLetterEvent
 
 
@@ -41,11 +42,27 @@ def main() -> None:
     commands.add_parser("dlq-list")
     replay = commands.add_parser("dlq-replay")
     replay.add_argument("dead_letter_id", type=int)
+    commands.add_parser("preflight")
     args = parser.parse_args()
     database_url = os.environ.get("FLAGSHIP_DATABASE_URL")
     store_path = os.environ.get("FLAGSHIP_OPERATIONS_STORE", "work/operations-store")
     if not database_url:
         raise SystemExit("FLAGSHIP_DATABASE_URL is required")
+    if args.command == "preflight":
+        try:
+            result = run_preflight(
+                database_url,
+                issuer=os.environ.get("FLAGSHIP_OIDC_ISSUER", ""),
+                audience=os.environ.get("FLAGSHIP_OIDC_AUDIENCE", ""),
+                jwks_url=os.environ.get("FLAGSHIP_OIDC_JWKS_URL", ""),
+                backup_key_base64=os.environ.get("FLAGSHIP_BACKUP_KEY_BASE64", ""),
+                allow_dev_tokens=os.environ.get("FLAGSHIP_ALLOW_DEV_TOKENS", "false").lower() == "true",
+            )
+        except PreflightError as exc:
+            print(json.dumps({"valid": False, "error": str(exc)}, sort_keys=True))
+            raise SystemExit(2)
+        print(json.dumps(result, sort_keys=True))
+        return
     db = Database(database_url, create_schema=False)
     store = LocalWormObjectStore(store_path)
     if args.command == "backup-create":

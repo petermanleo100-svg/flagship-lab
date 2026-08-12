@@ -47,7 +47,7 @@ jobs:
           main_sha=$(gh api "repos/${GITHUB_REPOSITORY}/git/ref/heads/main" --jq '.object.sha')
           [[ "${main_sha}" == "${GITHUB_SHA}" ]] || { echo "tag must point to current main"; exit 1; }
           checks=$(gh api "repos/${GITHUB_REPOSITORY}/commits/${GITHUB_SHA}/check-runs?per_page=100")
-          for required in backend postgres frontend container analyze; do
+          for required in backend postgres frontend container compose-smoke analyze; do
             jq -e --arg name "${required}" '[.check_runs[] | select(.name == $name and .conclusion == "success")] | length > 0' <<<"${checks}" >/dev/null || { echo "missing successful ${required} gate"; exit 1; }
           done
 

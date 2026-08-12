@@ -9,6 +9,8 @@ This runbook describes the verified application controls. Cloud account provisio
 - Backup and Outbox worker: separately credentialed and audited operational roles. Cross-tenant work requires explicit `BYPASSRLS` approval.
 - Every API token requires `tenant_id`, roles and resource scopes in `type:id:action` form.
 
+For local Compose, set distinct `POSTGRES_OWNER_PASSWORD` and `POSTGRES_APP_PASSWORD` values and use a fresh database volume; role bootstrap runs only on initial database creation. In managed PostgreSQL, the DBA must create equivalent identities and grants. Run `flagship-operations preflight` as the runtime identity and require secret-free `valid: true` output before traffic admission. Compose runs Alembic as the owner, then repeats this preflight before starting the API.
+
 ## Evidence custody
 
 Production uses `S3ObjectLockStore` with bucket versioning and Object Lock enabled in compliance mode. Configure an asymmetric KMS key through `AwsKmsSigner`; do not mount private key material. Verify retention policy and KMS key rotation in the cloud change record before release.
@@ -49,7 +51,7 @@ The `release-image` workflow separates proof from publication. Manual dispatch c
 ## Release gates
 
 1. Alembic upgrade, downgrade of the latest revision and re-upgrade pass.
-2. Backend, frontend, non-root container and PostgreSQL jobs pass on the release commit.
+2. Backend, frontend, non-root container, PostgreSQL and full Compose smoke jobs pass on the release commit.
 3. PostgreSQL concurrent idempotency/audit, RLS attack and clean restore tests pass without skip.
 4. [`capability-evidence-matrix.md`](capability-evidence-matrix.md) contains no claim without executable evidence.
 5. CodeQL passes for Python and JavaScript/TypeScript; dependency and security-sensitive CODEOWNERS reviews are resolved.

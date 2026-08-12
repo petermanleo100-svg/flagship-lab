@@ -36,10 +36,16 @@ alembic upgrade head
 ## 容器部署基线
 
 ```powershell
-$env:POSTGRES_PASSWORD="use-a-secret-manager-value"
+$env:POSTGRES_OWNER_PASSWORD="use-a-secret-manager-owner-value"
+$env:POSTGRES_APP_PASSWORD="use-a-distinct-runtime-value"
+$env:FLAGSHIP_OIDC_ISSUER="https://identity.example.com"
+$env:FLAGSHIP_OIDC_JWKS_URL="https://identity.example.com/.well-known/jwks.json"
+$env:FLAGSHIP_BACKUP_KEY_BASE64="base64-encoded-32-byte-key"
 $env:FLAGSHIP_JWT_SECRET="local-compose-only-secret-at-least-32-characters"
 docker compose up --build
 ```
+
+Compose uses a migration owner only for Alembic and a separate `NOSUPERUSER NOBYPASSRLS` runtime role. Before accepting traffic, the API preflight verifies the exact migration revision, table ownership, forced RLS, production OIDC configuration and backup key; CI boots this complete topology on every commit.
 
 容器以非 root 用户运行，API 文件系统只读、移除 Linux capabilities，并在 API 启动前执行迁移任务。生产部署应使用 OIDC/JWKS 和外部密钥管理，而不是 Compose 示例中的本地 JWT 密钥。
 

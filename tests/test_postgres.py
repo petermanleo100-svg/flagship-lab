@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import base64
 
 import pytest
 from concurrent.futures import ThreadPoolExecutor
@@ -11,6 +12,7 @@ from flagship_lab.sql_models import AuditEvent, Base, TaxTransactionRow
 from flagship_lab.taxflow import TaxFlowService, TaxTransaction
 from flagship_lab.backup import BackupService
 from flagship_lab.object_store import LocalWormObjectStore
+from flagship_lab.preflight import PreflightError, run_preflight
 
 
 @pytest.fixture()
@@ -116,3 +118,35 @@ def test_postgres_rls_blocks_unscoped_and_cross_tenant_queries(postgres_db):
         with postgres_db.engine.begin() as conn:
             conn.execute(text("DROP OWNED BY flagship_rls_test"))
             conn.execute(text("DROP ROLE flagship_rls_test"))
+
+
+def test_production_preflight_accepts_runtime_role_and_rejects_owner(postgres_db):
+    with postgres_db.engine.begin() as conn:
+        conn.execute(text("DROP ROLE IF EXISTS flagship_preflight"))
+        conn.execute(text("CREATE ROLE flagship_preflight LOGIN PASSWORD 'preflight-password' NOSUPERUSER NOBYPASSRLS"))
+        conn.execute(text("GRANT CONNECT ON DATABASE flagship TO flagship_preflight"))
+        conn.execute(text("GRANT USAGE ON SCHEMA public TO flagship_preflight"))
+        conn.execute(text("GRANT SELECT,INSERT,UPDATE,DELETE ON ALL TABLES IN SCHEMA public TO flagship_preflight"))
+        conn.execute(text("GRANT USAGE,SELECT ON ALL SEQUENCES IN SCHEMA public TO flagship_preflight"))
+    runtime_url = postgres_db.engine.url.set(username="flagship_preflight", password="preflight-password")
+    try:
+        result = run_preflight(
+            runtime_url.render_as_string(hide_password=False),
+            issuer="https://id.example",
+            audience="flagship-lab",
+            jwks_url="https://id.example/jwks",
+            backup_key_base64=base64.b64encode(b"k" * 32).decode(),
+        )
+        assert result["valid"] and result["database"]["user"] == "flagship_preflight"
+        with pytest.raises(PreflightError, match="superuser"):
+            run_preflight(
+                postgres_db.url,
+                issuer="https://id.example",
+                audience="flagship-lab",
+                jwks_url="https://id.example/jwks",
+                backup_key_base64=base64.b64encode(b"k" * 32).decode(),
+            )
+    finally:
+        with postgres_db.engine.begin() as conn:
+            conn.execute(text("DROP OWNED BY flagship_preflight"))
+            conn.execute(text("DROP ROLE flagship_preflight"))
