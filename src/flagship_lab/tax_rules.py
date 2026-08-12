@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from decimal import Decimal, ROUND_HALF_UP
 from typing import Any
 
 
@@ -43,17 +44,18 @@ def evaluate_rule(rule: dict[str, Any], row: Any, context: dict[str, Any]) -> tu
         missing = [field for field in rule["fields"] if row[field] in (None, "")]
         return bool(missing), {"missing_fields": missing}
     if operator == "computed_equal":
-        expected = 1.0
+        expected = Decimal("1")
         for field in rule["factors"]:
-            expected *= float(row[field])
-        expected = round(expected, 2)
-        actual = float(row[rule["actual"]])
-        return abs(expected - actual) > float(rule.get("tolerance", 0)), {"expected": expected, "actual": actual}
+            expected *= Decimal(str(row[field]))
+        expected = expected.quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+        actual = Decimal(str(row[rule["actual"]]))
+        tolerance = Decimal(str(rule.get("tolerance", 0)))
+        return abs(expected - actual) > tolerance, {"expected": str(expected), "actual": str(actual)}
     if operator == "in_set":
         value = row[rule["field"]]
         return value in context[rule["context"]], {"value": value}
     if operator == "gte":
-        actual = float(row[rule["field"]])
-        return actual >= float(rule["value"]), {"actual": actual, "threshold": rule["value"]}
+        actual = Decimal(str(row[rule["field"]]))
+        threshold = Decimal(str(rule["value"]))
+        return actual >= threshold, {"actual": str(actual), "threshold": str(threshold)}
     raise ValueError(f"unsupported operator: {operator}")
-

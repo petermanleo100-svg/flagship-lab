@@ -13,13 +13,18 @@ VALID_ROLES = frozenset({"viewer", "analyst", "reviewer", "admin"})
 bearer = HTTPBearer(auto_error=False)
 
 
-def issue_token(subject: str, roles: list[str], secret: str, ttl_minutes: int = 60) -> str:
+def issue_token(
+    subject: str, roles: list[str], secret: str, ttl_minutes: int = 60, tenant_id: str = "default"
+) -> str:
+    if not tenant_id or len(tenant_id) > 64 or not tenant_id.replace("_", "").replace("-", "").isalnum():
+        raise ValueError("tenant_id must use 1-64 letters, digits, underscores or hyphens")
     unknown = set(roles) - VALID_ROLES
     if unknown:
         raise ValueError(f"unknown roles: {sorted(unknown)}")
     now = datetime.now(timezone.utc)
     payload = {
         "sub": subject,
+        "tenant_id": tenant_id,
         "roles": sorted(set(roles)),
         "iat": now,
         "exp": now + timedelta(minutes=ttl_minutes),
@@ -36,7 +41,7 @@ def decode_token(token: str, secret: str) -> dict:
         algorithms=[ALGORITHM],
         audience="flagship-lab",
         issuer="flagship-lab",
-        options={"require": ["sub", "roles", "iat", "exp", "aud", "iss"]},
+        options={"require": ["sub", "tenant_id", "roles", "iat", "exp", "aud", "iss"]},
     )
 
 
@@ -57,4 +62,3 @@ def require_roles(secret: str, *allowed: str) -> Callable:
         return claims
 
     return dependency
-

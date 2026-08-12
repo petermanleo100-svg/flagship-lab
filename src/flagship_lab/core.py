@@ -2,11 +2,16 @@ from __future__ import annotations
 
 import hashlib
 import json
-import sqlite3
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterator
+
+from sqlalchemy import Engine, create_engine, event, func, insert, select, text
+from sqlalchemy.engine import Connection, URL
+from sqlalchemy.pool import NullPool, StaticPool
+
+from .sql_models import AuditEvent, Base, OutboxEvent
 
 
 def utc_now() -> str:
@@ -14,173 +19,105 @@ def utc_now() -> str:
 
 
 def canonical_json(value: Any) -> str:
-    return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"), default=str)
 
 
 def sha256_json(value: Any) -> str:
     return hashlib.sha256(canonical_json(value).encode("utf-8")).hexdigest()
 
 
+def _database_url(value: str | Path) -> str:
+    raw = str(value)
+    if "://" in raw:
+        return raw
+    path = Path(raw).resolve()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    return f"sqlite:///{path.as_posix()}"
+
+
 class Database:
-    def __init__(self, path: str | Path):
-        self.path = str(path)
-        Path(self.path).parent.mkdir(parents=True, exist_ok=True)
+    """Single SQLAlchemy runtime for SQLite development and PostgreSQL production."""
+
+    def __init__(self, path_or_url: str | Path, *, create_schema: bool = True):
+        self.url = _database_url(path_or_url)
+        self.path = self.url.removeprefix("sqlite:///") if self.url.startswith("sqlite:///") else self.url
+        self.create_schema = create_schema
+        options: dict[str, Any] = {"pool_pre_ping": True}
+        if self.url.startswith("sqlite"):
+            options["connect_args"] = {"check_same_thread": False, "timeout": 30}
+            if self.url.endswith(":memory:"):
+                options["poolclass"] = StaticPool
+            else:
+                # File-backed SQLite is a development/test adapter. NullPool closes the
+                # file handle after every unit of work and avoids Windows teardown locks.
+                options["poolclass"] = NullPool
+        else:
+            options.update(pool_size=10, max_overflow=20, pool_recycle=1800)
+        self.engine: Engine = create_engine(self.url, **options)
+        if self.url.startswith("sqlite"):
+            event.listen(self.engine, "connect", self._configure_sqlite)
+
+    @staticmethod
+    def _configure_sqlite(dbapi_connection, _connection_record) -> None:
+        cursor = dbapi_connection.cursor()
+        cursor.execute("PRAGMA foreign_keys=ON")
+        cursor.execute("PRAGMA journal_mode=WAL")
+        cursor.execute("PRAGMA busy_timeout=30000")
+        cursor.close()
+
+    @property
+    def dialect(self) -> str:
+        return self.engine.dialect.name
 
     @contextmanager
-    def connect(self) -> Iterator[sqlite3.Connection]:
-        conn = sqlite3.connect(self.path)
-        conn.row_factory = sqlite3.Row
-        conn.execute("PRAGMA foreign_keys = ON")
-        conn.execute("PRAGMA journal_mode = WAL")
-        try:
-            yield conn
-            conn.commit()
-        except Exception:
-            conn.rollback()
-            raise
-        finally:
-            conn.close()
+    def connect(self) -> Iterator[Connection]:
+        with self.engine.begin() as connection:
+            yield connection
 
     def initialize(self) -> None:
-        with self.connect() as conn:
-            conn.executescript(SCHEMA)
+        if self.create_schema:
+            Base.metadata.create_all(self.engine)
+
+    def dispose(self) -> None:
+        self.engine.dispose()
 
 
-SCHEMA = """
-CREATE TABLE IF NOT EXISTS audit_events (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    module TEXT NOT NULL,
-    event_type TEXT NOT NULL,
-    entity_id TEXT NOT NULL,
-    occurred_at TEXT NOT NULL,
-    payload_json TEXT NOT NULL,
-    previous_hash TEXT NOT NULL,
-    event_hash TEXT NOT NULL UNIQUE
-);
-
-CREATE TABLE IF NOT EXISTS tax_transactions (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    invoice_id TEXT NOT NULL,
-    seller_tax_id TEXT,
-    buyer_tax_id TEXT,
-    invoice_date TEXT NOT NULL,
-    amount REAL NOT NULL,
-    tax_rate REAL NOT NULL,
-    tax_amount REAL NOT NULL,
-    currency TEXT NOT NULL,
-    source_hash TEXT NOT NULL,
-    ingested_at TEXT NOT NULL
-);
-CREATE INDEX IF NOT EXISTS idx_tax_invoice ON tax_transactions(invoice_id);
-
-CREATE TABLE IF NOT EXISTS tax_rule_runs (
-    run_id TEXT PRIMARY KEY,
-    rule_version TEXT NOT NULL,
-    started_at TEXT NOT NULL,
-    completed_at TEXT,
-    transaction_count INTEGER NOT NULL DEFAULT 0,
-    finding_count INTEGER NOT NULL DEFAULT 0
-);
-
-CREATE TABLE IF NOT EXISTS tax_findings (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    run_id TEXT NOT NULL REFERENCES tax_rule_runs(run_id),
-    transaction_id INTEGER,
-    invoice_id TEXT NOT NULL,
-    rule_code TEXT NOT NULL,
-    severity TEXT NOT NULL,
-    explanation TEXT NOT NULL,
-    evidence_json TEXT NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS tax_run_workflow (
-    run_id TEXT PRIMARY KEY REFERENCES tax_rule_runs(run_id),
-    requested_by TEXT NOT NULL,
-    status TEXT NOT NULL DEFAULT 'PENDING_REVIEW',
-    reviewed_by TEXT,
-    reviewed_at TEXT,
-    decision_comment TEXT
-);
-
-CREATE TABLE IF NOT EXISTS regulation_documents (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    document_key TEXT NOT NULL,
-    title TEXT NOT NULL,
-    source_url TEXT NOT NULL,
-    published_at TEXT NOT NULL,
-    version_hash TEXT NOT NULL,
-    content TEXT NOT NULL,
-    UNIQUE(document_key, version_hash)
-);
-
-CREATE TABLE IF NOT EXISTS control_events (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    event_id TEXT NOT NULL UNIQUE,
-    event_type TEXT NOT NULL,
-    actor TEXT NOT NULL,
-    resource TEXT NOT NULL,
-    occurred_at TEXT NOT NULL,
-    approved INTEGER NOT NULL,
-    privileged INTEGER NOT NULL,
-    outcome TEXT NOT NULL,
-    payload_json TEXT NOT NULL,
-    evidence_hash TEXT NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS control_cases (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    event_id TEXT NOT NULL,
-    control_id TEXT NOT NULL,
-    severity TEXT NOT NULL,
-    explanation TEXT NOT NULL,
-    evidence_hash TEXT NOT NULL,
-    status TEXT NOT NULL DEFAULT 'OPEN'
-);
-
-CREATE TABLE IF NOT EXISTS control_case_transitions (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    case_id INTEGER NOT NULL REFERENCES control_cases(id),
-    from_status TEXT NOT NULL,
-    to_status TEXT NOT NULL,
-    actor TEXT NOT NULL,
-    reason TEXT NOT NULL,
-    occurred_at TEXT NOT NULL
-);
-CREATE INDEX IF NOT EXISTS idx_control_case_transition ON control_case_transitions(case_id, id);
-
-CREATE TABLE IF NOT EXISTS graph_entities (
-    entity_id TEXT PRIMARY KEY,
-    entity_type TEXT NOT NULL,
-    attributes_json TEXT NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS graph_edges (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    source_id TEXT NOT NULL,
-    target_id TEXT NOT NULL,
-    relation TEXT NOT NULL,
-    amount REAL NOT NULL DEFAULT 0,
-    occurred_at TEXT NOT NULL,
-    evidence_json TEXT NOT NULL
-);
-CREATE INDEX IF NOT EXISTS idx_graph_source ON graph_edges(source_id);
-CREATE INDEX IF NOT EXISTS idx_graph_target ON graph_edges(target_id);
-"""
+def append_outbox_event(
+    conn: Connection, tenant_id: str, topic: str, aggregate_id: str, payload: dict[str, Any]
+) -> None:
+    conn.execute(
+        insert(OutboxEvent).values(
+            tenant_id=tenant_id,
+            topic=topic,
+            aggregate_id=aggregate_id,
+            payload_json=canonical_json(payload),
+            created_at=utc_now(),
+            attempts=0,
+        )
+    )
 
 
 def append_audit_event(
-    conn: sqlite3.Connection,
+    conn: Connection,
     module: str,
     event_type: str,
     entity_id: str,
     payload: dict[str, Any],
+    tenant_id: str = "default",
 ) -> str:
+    # One transaction-scoped advisory lock serializes each tenant's chain on PostgreSQL.
+    if conn.dialect.name == "postgresql":
+        conn.execute(text("SELECT pg_advisory_xact_lock(hashtext(:scope))"), {"scope": f"audit:{tenant_id}"})
     previous = conn.execute(
-        "SELECT event_hash FROM audit_events ORDER BY id DESC LIMIT 1"
-    ).fetchone()
-    previous_hash = previous["event_hash"] if previous else "GENESIS"
+        select(AuditEvent.event_hash)
+        .where(AuditEvent.tenant_id == tenant_id)
+        .order_by(AuditEvent.id.desc())
+        .limit(1)
+    ).scalar_one_or_none()
+    previous_hash = previous or "GENESIS"
     occurred_at = utc_now()
     material = {
+        "tenant_id": tenant_id,
         "module": module,
         "event_type": event_type,
         "entity_id": entity_id,
@@ -190,20 +127,37 @@ def append_audit_event(
     }
     event_hash = sha256_json(material)
     conn.execute(
-        """INSERT INTO audit_events
-           (module,event_type,entity_id,occurred_at,payload_json,previous_hash,event_hash)
-           VALUES (?,?,?,?,?,?,?)""",
-        (module, event_type, entity_id, occurred_at, canonical_json(payload), previous_hash, event_hash),
+        insert(AuditEvent).values(
+            tenant_id=tenant_id,
+            module=module,
+            event_type=event_type,
+            entity_id=entity_id,
+            occurred_at=occurred_at,
+            payload_json=canonical_json(payload),
+            previous_hash=previous_hash,
+            event_hash=event_hash,
+        )
+    )
+    append_outbox_event(
+        conn,
+        tenant_id,
+        "audit.event.created",
+        entity_id,
+        {"module": module, "event_type": event_type, "event_hash": event_hash},
     )
     return event_hash
 
 
-def verify_audit_chain(conn: sqlite3.Connection) -> tuple[bool, int, str | None]:
+def verify_audit_chain(conn: Connection, tenant_id: str = "default") -> tuple[bool, int, str | None]:
     previous_hash = "GENESIS"
     count = 0
-    for row in conn.execute("SELECT * FROM audit_events ORDER BY id"):
+    rows = conn.execute(
+        select(AuditEvent).where(AuditEvent.tenant_id == tenant_id).order_by(AuditEvent.id)
+    ).mappings()
+    for row in rows:
         payload = json.loads(row["payload_json"])
         material = {
+            "tenant_id": tenant_id,
             "module": row["module"],
             "event_type": row["event_type"],
             "entity_id": row["entity_id"],
@@ -216,3 +170,9 @@ def verify_audit_chain(conn: sqlite3.Connection) -> tuple[bool, int, str | None]
         previous_hash = row["event_hash"]
         count += 1
     return True, count, None
+
+
+def database_health(db: Database) -> dict[str, Any]:
+    with db.connect() as conn:
+        conn.execute(select(func.count()).select_from(AuditEvent)).scalar_one()
+    return {"database": "up", "dialect": db.dialect}
