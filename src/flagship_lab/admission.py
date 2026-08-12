@@ -1,16 +1,29 @@
 from __future__ import annotations
-import json,re
+import hashlib,json,re
 from datetime import datetime,timedelta,timezone
 from pathlib import Path
 from urllib.parse import urlparse
 REQUIRED_CONTROLS={"alert_delivery","kafka_delivery_replay","kms_object_lock","managed_postgres_pitr_restore","oidc_key_rotation","otlp_trace_delivery","staging_migration_rollback"};_GIT_SHA=re.compile(r"^[0-9a-f]{40}$");_EVIDENCE_SHA=re.compile(r"^[0-9a-f]{64}$")
+def _verify_file(manifest:Path,name:str,item:dict,seen:set[Path],errors:list[str])->None:
+ relative=Path(str(item.get("evidence_file","")));root=(manifest.parent/"evidence").resolve()
+ if relative.is_absolute() or not relative.parts or relative.parts[0]!="evidence":errors.append(f"control {name} evidence_file must be a relative path under evidence/");return
+ try:resolved=(manifest.parent/relative).resolve(strict=True)
+ except OSError:errors.append(f"control {name} evidence_file does not exist");return
+ if not resolved.is_relative_to(root) or not resolved.is_file():errors.append(f"control {name} evidence_file escapes evidence/ or is not a regular file");return
+ if resolved in seen:errors.append(f"control {name} evidence_file must not be reused by another control");return
+ seen.add(resolved);size=resolved.stat().st_size
+ if size==0 or size>50*1024*1024:errors.append(f"control {name} evidence_file must be between 1 byte and 50 MiB");return
+ digest=hashlib.sha256()
+ with resolved.open("rb") as stream:
+  for chunk in iter(lambda:stream.read(1024*1024),b""):digest.update(chunk)
+ if digest.hexdigest()!=item.get("evidence_sha256"):errors.append(f"control {name} evidence_sha256 does not match evidence_file")
 def verify_admission(path:str|Path,release_sha:str,max_age_hours:int=168)->dict:
  if not _GIT_SHA.fullmatch(release_sha):return {"valid":False,"errors":["release_sha must be a lowercase 40-character Git SHA"]}
  if not 1<=max_age_hours<=168:return {"valid":False,"errors":["max_age_hours must be between 1 and 168"]}
- try:document=json.loads(Path(path).read_text(encoding="utf-8"))
+ try:manifest=Path(path).resolve(strict=True);document=json.loads(manifest.read_text(encoding="utf-8"))
  except (OSError,UnicodeError,json.JSONDecodeError) as exc:return {"valid":False,"errors":[f"cannot read admission evidence: {exc}"]}
  errors=[]
- if document.get("schema_version")!=2:errors.append("schema_version must be 2")
+ if document.get("schema_version")!=3:errors.append("schema_version must be 3")
  if document.get("project")!="flagship-lab":errors.append("project must be flagship-lab")
  if document.get("release_sha")!=release_sha:errors.append("evidence release_sha does not match the requested release")
  if str(document.get("environment","")).strip().lower() in {"","dev","development","local","test"}:errors.append("environment must identify a production-like deployment")
@@ -18,6 +31,7 @@ def verify_admission(path:str|Path,release_sha:str,max_age_hours:int=168)->dict:
  if not deployed_by:errors.append("deployed_by is required")
  controls=document.get("controls")
  if not isinstance(controls,dict):errors.append("controls must be an object");controls={}
+ seen=set()
  for name in sorted(REQUIRED_CONTROLS):
   item=controls.get(name)
   if not isinstance(item,dict):errors.append(f"missing required control: {name}");continue
@@ -28,6 +42,7 @@ def verify_admission(path:str|Path,release_sha:str,max_age_hours:int=168)->dict:
   parsed=urlparse(str(item.get("evidence_uri","")))
   if parsed.scheme not in {"https","s3","gs","urn"} or (parsed.scheme in {"https","s3","gs"} and not parsed.netloc) or (parsed.scheme=="urn" and not parsed.path):errors.append(f"control {name} evidence_uri must be durable (https, s3, gs or urn)")
   if not _EVIDENCE_SHA.fullmatch(str(item.get("evidence_sha256",""))):errors.append(f"control {name} evidence_sha256 must be 64 lowercase hex characters")
+  else:_verify_file(manifest,name,item,seen,errors)
   try:
    checked=datetime.fromisoformat(str(item.get("verified_at_utc","")).replace("Z","+00:00"))
    if checked.tzinfo is None or checked.utcoffset()!=timedelta(0):raise ValueError
