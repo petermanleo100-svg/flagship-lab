@@ -4,7 +4,7 @@ import os
 
 import pytest
 from concurrent.futures import ThreadPoolExecutor
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, func, select, text
 
 from flagship_lab.core import Database, verify_audit_chain
 from flagship_lab.sql_models import AuditEvent, Base, TaxTransactionRow
