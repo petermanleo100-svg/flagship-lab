@@ -16,6 +16,7 @@ from .operation_metrics import record_operation
 from .outbox import OutboxPublisher
 from .preflight import PreflightError,run_preflight
 from .sql_models import DeadLetterEvent
+from .admission import verify_admission
 
 
 def encryption_key() -> bytes:
@@ -44,6 +45,10 @@ def main() -> None:
     replay = commands.add_parser("dlq-replay")
     replay.add_argument("dead_letter_id", type=int)
     commands.add_parser("preflight")
+    admission = commands.add_parser("admission-verify")
+    admission.add_argument("evidence_file")
+    admission.add_argument("--release-sha", required=True)
+    admission.add_argument("--max-age-hours", type=int, default=168)
     args = parser.parse_args()
     operation = args.command.replace("-", "_")
     metric_dir = os.environ.get("FLAGSHIP_TEXTFILE_DIR", "")
@@ -66,6 +71,8 @@ def main() -> None:
 
 
 def _execute(args) -> dict:
+    if args.command == "admission-verify":
+        return verify_admission(args.evidence_file, args.release_sha, args.max_age_hours)
     database_url = os.environ.get("FLAGSHIP_DATABASE_URL")
     store_path = os.environ.get("FLAGSHIP_OPERATIONS_STORE", "work/operations-store")
     if not database_url:

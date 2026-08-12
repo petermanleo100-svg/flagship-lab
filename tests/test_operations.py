@@ -34,3 +34,11 @@ def test_operations_cli_records_failure_before_propagating(tmp_path, monkeypatch
     with pytest.raises(SystemExit, match="required"):
         main()
     assert 'flagship_operation_success{operation="backup_create"} 0' in (tmp_path / "metrics" / "flagship_backup_create.prom").read_text()
+
+
+def test_admission_cli_fails_closed_without_runtime_database_config(tmp_path, monkeypatch, capsys):
+    evidence = tmp_path / "evidence.json"; evidence.write_text("{}", encoding="utf-8")
+    monkeypatch.delenv("FLAGSHIP_DATABASE_URL", raising=False)
+    monkeypatch.setattr(sys, "argv", ["flagship-operations", "admission-verify", str(evidence), "--release-sha", "a" * 40])
+    with pytest.raises(SystemExit, match="2"): main()
+    assert json.loads(capsys.readouterr().out)["valid"] is False
