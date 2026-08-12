@@ -11,6 +11,7 @@
 - **平台治理**：SQLAlchemy 单一运行路径、PostgreSQL CI、冻结的 Alembic 迁移链、租户哈希审计链、事务 Outbox 与重试发布器。
 - **安全与证据**：OIDC/JWKS 或本地开发 JWT、角色权限、Ed25519 公钥可验签证据包、请求追踪、安全响应头。
 - **运维接口**：`/health/live`、数据库就绪探针 `/health/ready`、Prometheus 文本指标 `/metrics`。
+- **生产硬化**：资源级授权、S3 Object Lock/KMS 适配、Kafka Outbox/DLQ、OpenTelemetry、加密逻辑备份与验证恢复。
 
 本仓库不会把路线图当作现有功能。对象锁定存储、KMS 密钥托管、完整资源级 ABAC、生产消息代理适配器、OpenTelemetry collector 与大图数据库仍在能力矩阵中标为限制或路线图。
 
@@ -63,5 +64,7 @@ OIDC 生产变量：
 ## 验证与真实性
 
 CI 包含 Python 全量测试、PostgreSQL 17 真实服务测试和 React 构建。迁移测试覆盖空库创建以及从 `20260811_0002` 带数据升级。性能数字只允许引用带环境说明的基准报告，不从合成数据推导生产 SLA 或真实风险识别效果。
+
+PostgreSQL CI 还覆盖同一幂等键并发写入、租户审计链并发串行化，以及加密备份恢复到独立 schema。Compose 提供独立 Outbox worker 和 OpenTelemetry Collector；生产环境仍需配置真实 Kafka、遥测后端、KMS、S3 Object Lock、WAL/PITR 与告警路由。
 
 详细索引见 [`docs/portfolio-evidence-index.md`](docs/portfolio-evidence-index.md)。

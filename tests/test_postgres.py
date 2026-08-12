@@ -9,6 +9,8 @@ from sqlalchemy import delete, func, select
 from flagship_lab.core import Database, verify_audit_chain
 from flagship_lab.sql_models import AuditEvent, Base, TaxTransactionRow
 from flagship_lab.taxflow import TaxFlowService, TaxTransaction
+from flagship_lab.backup import BackupService
+from flagship_lab.object_store import LocalWormObjectStore
 
 
 @pytest.fixture()
@@ -57,3 +59,23 @@ def test_postgres_concurrent_audit_chain_and_idempotency_are_serialized(postgres
     with postgres_db.connect() as conn:
         valid, events, broken = verify_audit_chain(conn, "concurrent")
     assert valid and events == 25 and broken is None
+
+
+def test_postgres_backup_restores_to_clean_schema(postgres_db, tmp_path):
+    TaxFlowService(postgres_db, "recovery").ingest([
+        TaxTransaction("PG-BACKUP", "S", "B", "2026-01-01", "100", "0.13", "13")])
+    service = BackupService(postgres_db, LocalWormObjectStore(tmp_path / "backup"), b"p" * 32)
+    backup = service.create("postgres-ci")
+    # A separate schema in the same PostgreSQL instance provides an isolated restore target.
+    with postgres_db.engine.begin() as conn:
+        conn.execute(text("DROP SCHEMA IF EXISTS recovery_target CASCADE"))
+        conn.execute(text("CREATE SCHEMA recovery_target"))
+    target_url = postgres_db.url + "?options=-csearch_path%3Drecovery_target"
+    target = Database(target_url)
+    try:
+        result = service.restore(backup.stored, target)
+        assert result["valid"] and result["audit_chains"]["recovery"]["valid"]
+    finally:
+        target.dispose()
+        with postgres_db.engine.begin() as conn:
+            conn.execute(text("DROP SCHEMA recovery_target CASCADE"))

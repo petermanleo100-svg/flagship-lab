@@ -46,3 +46,20 @@ def test_upgrade_from_phase2_preserves_existing_rows(tmp_path, monkeypatch):
     assert row["invoice_id"] == "LEGACY"
     assert row["tenant_id"] == "default"
     assert str(row["amount"]) == "100.25"
+
+
+def test_latest_migration_downgrades_and_reapplies_without_domain_data_loss(tmp_path, monkeypatch):
+    monkeypatch.delenv("FLAGSHIP_DATABASE_URL", raising=False)
+    path = tmp_path / "rollback.db"; config = _config(path)
+    command.upgrade(config, "head")
+    db = Database(path, create_schema=False)
+    TaxFlowService(db, "rollback").ingest([
+        TaxTransaction("ROLLBACK", "S", "B", "2026-01-01", "100", "0.13", "13")])
+    db.dispose()
+    command.downgrade(config, "20260812_0003")
+    inspector = inspect(create_engine(f"sqlite:///{path.as_posix()}"))
+    assert "consumer_receipts" not in inspector.get_table_names()
+    command.upgrade(config, "head")
+    engine = create_engine(f"sqlite:///{path.as_posix()}")
+    with engine.connect() as conn:
+        assert conn.execute(text("SELECT COUNT(*) FROM tax_transactions WHERE invoice_id='ROLLBACK'")).scalar_one() == 1
