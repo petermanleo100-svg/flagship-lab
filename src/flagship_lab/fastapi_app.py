@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from decimal import Decimal
 import logging
+import os
 from pathlib import Path
 from time import perf_counter
 from typing import Any
@@ -23,6 +24,7 @@ from .observability import Metrics
 from .regintel import RegIntelService
 from .riskgraph import Edge, Entity, RiskGraphService
 from .taxflow import TaxFlowService, TaxTransaction
+from .telemetry import TelemetryConfig, configure_telemetry
 
 
 class TokenRequest(BaseModel):
@@ -109,6 +111,8 @@ def create_app(
     object_store: ObjectStore | None = None,
     evidence_signer: EvidenceSigner | None = None,
     evidence_retention_days: int = 2555,
+    telemetry_config: TelemetryConfig | None = None,
+    span_exporter=None,
 ) -> FastAPI:
     if len(jwt_secret) < 32:
         raise ValueError("jwt_secret must contain at least 32 characters")
@@ -313,4 +317,6 @@ def create_app(
             "managed_immutable_evidence": managed_evidence is not None,
         }
 
+    if telemetry_config is not None or span_exporter is not None or os.environ.get("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT"):
+        configure_telemetry(app, db.engine, telemetry_config, span_exporter)
     return app
