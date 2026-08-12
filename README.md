@@ -67,6 +67,8 @@ CI 包含 Python 全量测试、PostgreSQL 17 真实服务测试和 React 构建
 
 仓库发布治理包含 Python 与 JavaScript/TypeScript CodeQL、每周依赖更新、安全路径 CODEOWNERS 和逐项发布清单。GitHub 分支保护与人员审批属于仓库设置，必须在生产准入前由所有者启用并留证。
 
+CI 还使用 `promtool` 校验版本化告警规则，为构建后的容器生成 SPDX JSON SBOM，并阻断已有修复的 Critical 漏洞；普通 CI 镜像不冒充已发布或已签名的生产镜像。
+
 PostgreSQL CI 还覆盖同一幂等键并发写入、租户审计链并发串行化，以及加密备份恢复到独立 schema。Compose 提供独立 Outbox worker 和 OpenTelemetry Collector；生产环境仍需配置真实 Kafka、遥测后端、KMS、S3 Object Lock、WAL/PITR 与告警路由。
 
 生产 PostgreSQL 必须分离迁移所有者、请求服务与运维 worker 角色。请求服务使用 `NOSUPERUSER NOBYPASSRLS`；备份和跨租户 Outbox worker 的 `BYPASSRLS` 角色只能由独立密钥和审计策略控制。CI 会用非 owner 角色验证无 tenant context 返回零行、跨租户读写被 RLS 拒绝。

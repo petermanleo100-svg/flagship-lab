@@ -42,6 +42,8 @@ Replayed events retain the original stable event ID. Consumers must use `Idempot
 
 The API exports OTLP traces and Prometheus metrics. Deploy `deploy/otel-collector.yaml`, route the collector to the approved backend, and load `deploy/prometheus/flagship-alerts.yml`. A database failure must make `/health/ready` return 503 while `/health/live` remains available. Do not restart-loop a healthy process when only a dependency is unavailable.
 
+CI validates Prometheus rule syntax with `promtool`. Notification routing and a test page to each named owner remain deployment acceptance gates. Container CI retains an SPDX JSON SBOM for 30 days and blocks vulnerabilities that are both Critical and have a known fix. Review unfixed Critical findings explicitly; do not describe them as remediated. Provenance attestation is reserved for a tagged image publication workflow because ordinary CI images are not release artifacts.
+
 ## Release gates
 
 1. Alembic upgrade, downgrade of the latest revision and re-upgrade pass.

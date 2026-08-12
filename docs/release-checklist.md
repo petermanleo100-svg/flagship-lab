@@ -14,3 +14,5 @@
 - [ ] Logical restore and managed PostgreSQL PITR meet customer-approved RPO/RTO in a recorded drill.
 - [ ] Synthetic end-to-end tax, regulation, control and evidence workflows pass before real data admission.
 - [ ] Capability matrix, README and applicant materials contain no claim beyond release evidence.
+- [ ] `promtool` validates alert rules, and a test notification reaches each named owner in the deployment environment.
+- [ ] The release commit has a retained SPDX image SBOM and no fixed Critical vulnerability blocked by CI.
