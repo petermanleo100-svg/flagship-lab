@@ -70,8 +70,13 @@ class Database:
         return self.engine.dialect.name
 
     @contextmanager
-    def connect(self) -> Iterator[Connection]:
+    def connect(self, tenant_id: str | None = None) -> Iterator[Connection]:
         with self.engine.begin() as connection:
+            if tenant_id is not None and connection.dialect.name == "postgresql":
+                if not tenant_id or len(tenant_id) > 64 or not tenant_id.replace("_", "").replace("-", "").isalnum():
+                    raise ValueError("invalid tenant_id")
+                connection.execute(text("SELECT set_config('flagship.tenant_id', :tenant, true)"),
+                                   {"tenant": tenant_id})
             yield connection
 
     def initialize(self) -> None:

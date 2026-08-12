@@ -2,23 +2,29 @@ from __future__ import annotations
 
 from decimal import Decimal
 import logging
+import os
 from pathlib import Path
 from time import perf_counter
 from typing import Any
 from uuid import uuid4
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
-from fastapi.responses import FileResponse, PlainTextResponse
+from fastapi.responses import FileResponse, PlainTextResponse, Response
 from pydantic import BaseModel, Field
 
 from .auth import HMACTokenVerifier, TokenVerifier, issue_token, require_verified_roles
+from .authorization import authorize_resource
 from .controlpulse import ControlEvent, ControlPulseService
 from .core import Database, database_health, verify_audit_chain
 from .evidence import export_tax_run
+from .evidence_service import EvidenceService
+from .object_store import LocalWormObjectStore, ObjectStore
+from .signing import Ed25519Signer, EvidenceSigner
 from .observability import Metrics
 from .regintel import RegIntelService
 from .riskgraph import Edge, Entity, RiskGraphService
 from .taxflow import TaxFlowService, TaxTransaction
+from .telemetry import TelemetryConfig, configure_telemetry
 
 
 class TokenRequest(BaseModel):
@@ -26,6 +32,7 @@ class TokenRequest(BaseModel):
     tenant_id: str = Field(default="default", min_length=1, max_length=64, pattern=r"^[a-zA-Z0-9_-]+$")
     roles: list[str]
     ttl_minutes: int = Field(default=60, ge=1, le=480)
+    resource_scopes: list[str] = Field(default_factory=lambda: ["*:*:*"])
 
 
 class TaxTransactionIn(BaseModel):
@@ -101,6 +108,11 @@ def create_app(
     token_verifier: TokenVerifier | None = None,
     evidence_signing_private_key_pem: str | bytes | None = None,
     initialize_schema: bool = True,
+    object_store: ObjectStore | None = None,
+    evidence_signer: EvidenceSigner | None = None,
+    evidence_retention_days: int = 2555,
+    telemetry_config: TelemetryConfig | None = None,
+    span_exporter=None,
 ) -> FastAPI:
     if len(jwt_secret) < 32:
         raise ValueError("jwt_secret must contain at least 32 characters")
@@ -113,6 +125,12 @@ def create_app(
     metrics = Metrics()
     logger = logging.getLogger("flagship.request")
     verifier = token_verifier or HMACTokenVerifier(jwt_secret)
+    managed_evidence = None
+    if object_store is not None or evidence_signer is not None:
+        if object_store is None or evidence_signer is None:
+            raise ValueError("object_store and evidence_signer must be configured together")
+        managed_evidence = EvidenceService(db, object_store, evidence_signer,
+                                           retention_days=evidence_retention_days)
     can_view = require_verified_roles(verifier, "viewer", "analyst", "reviewer", "admin")
     can_analyze = require_verified_roles(verifier, "analyst", "admin")
     can_review = require_verified_roles(verifier, "reviewer", "admin")
@@ -166,11 +184,12 @@ def create_app(
         if not allow_dev_tokens:
             raise HTTPException(status_code=404, detail="development token endpoint disabled")
         return {"access_token": issue_token(request.subject, request.roles, jwt_secret, request.ttl_minutes,
-                                              request.tenant_id), "token_type": "bearer"}
+                                              request.tenant_id, request.resource_scopes), "token_type": "bearer"}
 
     @app.post("/tax/transactions", status_code=201)
     def ingest_tax(items: list[TaxTransactionIn], claims: dict = Depends(can_analyze),
                    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key")):
+        authorize_resource(claims, "tax_data", "transactions", "write")
         tax = TaxFlowService(db, claims["tenant_id"])
         try:
             count = tax.ingest([TaxTransaction(**item.model_dump()) for item in items], idempotency_key)
@@ -181,6 +200,7 @@ def create_app(
     @app.post("/tax/runs", status_code=201)
     def run_tax(request: RuleRunRequest, claims: dict = Depends(can_analyze),
                 idempotency_key: str | None = Header(default=None, alias="Idempotency-Key")):
+        authorize_resource(claims, "tax_run", "new", "create")
         tax = TaxFlowService(db, claims["tenant_id"])
         try:
             result = tax.run_rules(request.rule_version, request.rule_pack, idempotency_key)
@@ -193,6 +213,7 @@ def create_app(
 
     @app.post("/tax/runs/{run_id}/review")
     def review_tax_run(run_id: str, request: ReviewDecisionIn, claims: dict = Depends(can_review)):
+        authorize_resource(claims, "tax_run", run_id, "review")
         tax = TaxFlowService(db, claims["tenant_id"])
         try:
             return tax.review_run(run_id, claims["sub"], request.decision, request.comment)
@@ -201,42 +222,55 @@ def create_app(
 
     @app.get("/tax/findings")
     def tax_findings(run_id: str, claims: dict = Depends(can_view)):
+        authorize_resource(claims, "tax_run", run_id, "read")
         tax = TaxFlowService(db, claims["tenant_id"])
         return tax.findings(run_id)
 
     @app.get("/evidence/tax/{run_id}", response_class=FileResponse)
     def tax_evidence(run_id: str, claims: dict = Depends(can_review)):
+        authorize_resource(claims, "tax_run", run_id, "evidence")
         tax = TaxFlowService(db, claims["tenant_id"])
         output = Path("work/evidence") / claims["tenant_id"] / f"tax-{run_id}.zip"
         try:
             workflow = tax.workflow(run_id)
             if workflow is None or workflow["status"] != "APPROVED":
                 raise HTTPException(status_code=409, detail="tax run requires independent approval")
-            with db.connect() as conn:
-                export_tax_run(conn, run_id, output, signing_secret=signing_secret,
-                               key_id="flagship-api-signing-v1", tenant_id=claims["tenant_id"],
-                               signing_private_key_pem=evidence_signing_private_key_pem)
+            if managed_evidence is not None:
+                stored = managed_evidence.preserve_tax_run(claims["tenant_id"], run_id)
+                return Response(content=managed_evidence.read(stored), media_type="application/zip",
+                                headers={"Content-Disposition": f'attachment; filename="tax-{run_id}.zip"',
+                                         "X-Evidence-Version": stored.version_id,
+                                         "X-Evidence-SHA256": stored.sha256})
+            else:
+                with db.connect(claims["tenant_id"]) as conn:
+                    export_tax_run(conn, run_id, output, signing_secret=signing_secret,
+                                   key_id="flagship-api-signing-v1", tenant_id=claims["tenant_id"],
+                                   signing_private_key_pem=evidence_signing_private_key_pem)
         except ValueError as exc:
             raise HTTPException(status_code=404, detail=str(exc))
         return FileResponse(output, media_type="application/zip", filename=output.name)
 
     @app.post("/reg/documents", status_code=201)
     def add_reg_document(request: RegulationDocumentIn, claims: dict = Depends(can_analyze)):
+        authorize_resource(claims, "reg_document", request.document_key, "write")
         reg = RegIntelService(db, claims["tenant_id"])
         return {"version_hash": reg.add_document(**request.model_dump()), "actor": claims["sub"]}
 
     @app.post("/reg/answer")
     def answer_reg(request: QueryIn, claims: dict = Depends(can_view)):
+        authorize_resource(claims, "reg_corpus", "documents", "read")
         reg = RegIntelService(db, claims["tenant_id"])
         return reg.answer(request.query)
 
     @app.post("/controls/events", status_code=201)
     def add_control_event(request: ControlEventIn, claims: dict = Depends(can_analyze)):
+        authorize_resource(claims, "control_event", request.event_id, "write")
         controls = ControlPulseService(db, claims["tenant_id"])
         return {"cases": controls.ingest_and_evaluate(ControlEvent(**request.model_dump())), "actor": claims["sub"]}
 
     @app.get("/controls/cases")
     def control_cases(claims: dict = Depends(can_review)):
+        authorize_resource(claims, "control_case", "*", "list")
         controls = ControlPulseService(db, claims["tenant_id"])
         return controls.open_cases()
 
@@ -244,6 +278,7 @@ def create_app(
     def transition_control_case(
         case_id: int, request: ControlTransitionIn, claims: dict = Depends(can_review)
     ):
+        authorize_resource(claims, "control_case", str(case_id), "transition")
         controls = ControlPulseService(db, claims["tenant_id"])
         try:
             return controls.transition_case(case_id, claims["sub"], request.to_status, request.reason)
@@ -252,40 +287,49 @@ def create_app(
 
     @app.get("/controls/cases/{case_id}/history")
     def control_case_history(case_id: int, claims: dict = Depends(can_review)):
+        authorize_resource(claims, "control_case", str(case_id), "read")
         controls = ControlPulseService(db, claims["tenant_id"])
         return controls.case_history(case_id)
 
     @app.post("/graph/entities", status_code=201)
     def add_entities(items: list[EntityIn], claims: dict = Depends(can_analyze)):
+        authorize_resource(claims, "risk_graph", "entities", "write")
         graph = RiskGraphService(db, claims["tenant_id"])
         graph.add_entities([Entity(**item.model_dump()) for item in items])
         return {"upserted": len(items), "actor": claims["sub"]}
 
     @app.post("/graph/edges", status_code=201)
     def add_edges(items: list[EdgeIn], claims: dict = Depends(can_analyze)):
+        authorize_resource(claims, "risk_graph", "edges", "write")
         graph = RiskGraphService(db, claims["tenant_id"])
         graph.add_edges([Edge(**item.model_dump()) for item in items])
         return {"inserted": len(items), "actor": claims["sub"]}
 
     @app.get("/graph/findings")
     def graph_findings(claims: dict = Depends(can_view)):
+        authorize_resource(claims, "risk_graph", "findings", "read")
         graph = RiskGraphService(db, claims["tenant_id"])
         return graph.investigate()
 
     @app.get("/audit/verify")
     def audit_verify(claims: dict = Depends(can_review)):
-        with db.connect() as conn:
+        authorize_resource(claims, "audit_chain", claims["tenant_id"], "verify")
+        with db.connect(claims["tenant_id"]) as conn:
             valid, count, broken = verify_audit_chain(conn, claims["tenant_id"])
         return {"valid": valid, "events": count, "broken_hash": broken}
 
     @app.get("/admin/config-check")
     def config_check(claims: dict = Depends(admin_only)):
+        authorize_resource(claims, "platform_config", "runtime", "read")
         return {
             "jwt_secret_configured": True,
             "evidence_signing_key_separated": evidence_signing_secret is not None and signing_secret != jwt_secret,
             "development_tokens_enabled": allow_dev_tokens,
             "external_token_verifier": token_verifier is not None,
             "asymmetric_evidence_signing": evidence_signing_private_key_pem is not None,
+            "managed_immutable_evidence": managed_evidence is not None,
         }
 
+    if telemetry_config is not None or span_exporter is not None or os.environ.get("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT"):
+        configure_telemetry(app, db.engine, telemetry_config, span_exporter)
     return app

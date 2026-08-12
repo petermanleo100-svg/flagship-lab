@@ -125,7 +125,7 @@ class TaxFlowService:
         rows = list(transactions)
         request_hash = sha256_json([asdict(row) for row in rows])
         now = utc_now()
-        with self.db.connect() as conn:
+        with self.db.connect(self.tenant_id) as conn:
             replay = self._idempotent_response(conn, "tax.ingest", idempotency_key, request_hash)
             if replay is not None:
                 return int(replay["ingested"])
@@ -156,7 +156,7 @@ class TaxFlowService:
         effective_version = rule_version or f"{pack['pack_id']}/{pack['version']}"
         request_hash = sha256_json({"rule_version": effective_version, "rule_pack": pack})
         run_id = str(uuid.uuid4())
-        with self.db.connect() as conn:
+        with self.db.connect(self.tenant_id) as conn:
             replay = self._idempotent_response(conn, "tax.run_rules", idempotency_key, request_hash)
             if replay is not None:
                 return replay
@@ -231,7 +231,7 @@ class TaxFlowService:
     def request_review(self, run_id: str, requested_by: str) -> dict:
         if not requested_by.strip():
             raise ValueError("requested_by is required")
-        with self.db.connect() as conn:
+        with self.db.connect(self.tenant_id) as conn:
             exists = conn.execute(
                 select(TaxRuleRun.run_id).where(
                     TaxRuleRun.run_id == run_id, TaxRuleRun.tenant_id == self.tenant_id
@@ -271,7 +271,7 @@ class TaxFlowService:
             raise ValueError("decision must be APPROVE or REJECT")
         if not comment.strip():
             raise ValueError("review comment is required")
-        with self.db.connect() as conn:
+        with self.db.connect(self.tenant_id) as conn:
             row = conn.execute(
                 select(TaxRunWorkflow).where(
                     TaxRunWorkflow.run_id == run_id, TaxRunWorkflow.tenant_id == self.tenant_id
@@ -317,7 +317,7 @@ class TaxFlowService:
             )
 
     def workflow(self, run_id: str) -> dict | None:
-        with self.db.connect() as conn:
+        with self.db.connect(self.tenant_id) as conn:
             row = conn.execute(
                 select(TaxRunWorkflow).where(
                     TaxRunWorkflow.run_id == run_id, TaxRunWorkflow.tenant_id == self.tenant_id
@@ -342,7 +342,7 @@ class TaxFlowService:
         return result
 
     def findings(self, run_id: str) -> list[dict]:
-        with self.db.connect() as conn:
+        with self.db.connect(self.tenant_id) as conn:
             return [
                 dict(row)
                 for row in conn.execute(

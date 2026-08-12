@@ -5,6 +5,7 @@ import logging
 import threading
 from collections import Counter
 from datetime import datetime, timezone
+from .telemetry import trace_context
 
 
 class JsonFormatter(logging.Formatter):
@@ -15,6 +16,9 @@ class JsonFormatter(logging.Formatter):
             value = getattr(record, field, None)
             if value is not None:
                 payload[field] = value
+        trace_id, span_id = trace_context()
+        if trace_id:
+            payload.update(trace_id=trace_id, span_id=span_id)
         return json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
 
 

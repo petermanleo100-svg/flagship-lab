@@ -188,4 +188,27 @@ class OutboxEvent(Base):
     created_at: Mapped[str] = mapped_column(String(40), nullable=False)
     published_at: Mapped[str | None] = mapped_column(String(40))
     attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    last_error: Mapped[str | None] = mapped_column(Text)
+    dead_lettered_at: Mapped[str | None] = mapped_column(String(40))
     __table_args__ = (Index("ix_outbox_unpublished", "published_at", "id"),)
+
+
+class DeadLetterEvent(Base):
+    __tablename__ = "dead_letter_events"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    outbox_id: Mapped[int] = mapped_column(Integer, nullable=False, unique=True)
+    tenant_id: Mapped[str] = mapped_column(String(TENANT_LENGTH), nullable=False, index=True)
+    topic: Mapped[str] = mapped_column(String(100), nullable=False)
+    aggregate_id: Mapped[str] = mapped_column(String(100), nullable=False)
+    payload_json: Mapped[str] = mapped_column(Text, nullable=False)
+    failure_reason: Mapped[str] = mapped_column(Text, nullable=False)
+    failed_at: Mapped[str] = mapped_column(String(40), nullable=False)
+    replayed_at: Mapped[str | None] = mapped_column(String(40))
+
+
+class ConsumerReceipt(Base):
+    __tablename__ = "consumer_receipts"
+    consumer_name: Mapped[str] = mapped_column(String(100), primary_key=True)
+    event_id: Mapped[str] = mapped_column(String(100), primary_key=True)
+    tenant_id: Mapped[str] = mapped_column(String(TENANT_LENGTH), nullable=False, index=True)
+    processed_at: Mapped[str] = mapped_column(String(40), nullable=False)

@@ -1,7 +1,7 @@
 [project]
 name = "flagship-lab"
 version = "0.1.0"
-description = "Auditable tax technology, regulatory intelligence, IT controls, and graph risk MVPs"
+description = "Auditable multi-tenant tax, regulatory, controls, and graph-risk workflow platform"
 requires-python = ">=3.11"
 dependencies = [
   "fastapi==0.141.1",
@@ -14,13 +14,21 @@ dependencies = [
   "alembic==1.19.1",
   "psycopg[binary]==3.3.4",
   "cryptography==49.0.0",
+  "opentelemetry-api==1.39.1",
+  "opentelemetry-sdk==1.39.1",
+  "opentelemetry-exporter-otlp-proto-http==1.39.1",
+  "opentelemetry-instrumentation-fastapi==0.60b1",
+  "opentelemetry-instrumentation-sqlalchemy==0.60b1",
 ]
 
 [project.optional-dependencies]
 test = ["pytest==9.1.1", "httpx==0.28.1"]
+kafka = ["confluent-kafka==2.12.2"]
 
 [project.scripts]
 flagship-lab = "flagship_lab.cli:main"
+flagship-worker = "flagship_lab.worker:main"
+flagship-operations = "flagship_lab.operations:main"
 
 
 [build-system]

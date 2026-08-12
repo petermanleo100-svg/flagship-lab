@@ -19,7 +19,8 @@ class StaticJWKClient:
 
 def _token(private_key, **overrides):
     now = datetime.now(timezone.utc)
-    claims = {"sub": "alice", "tenant_id": "alpha", "roles": ["analyst"], "iat": now,
+    claims = {"sub": "alice", "tenant_id": "alpha", "roles": ["analyst"],
+              "resource_scopes": ["tax_run:*:read"], "iat": now,
               "exp": now + timedelta(minutes=5), "aud": "flagship-api", "iss": "https://identity.example.com"}
     claims.update(overrides)
     return jwt.encode(claims, private_key, algorithm="RS256", headers={"kid": "test-key"})

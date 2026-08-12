@@ -28,6 +28,7 @@ services:
     environment:
       FLAGSHIP_DATABASE_URL: postgresql+psycopg://flagship:${POSTGRES_PASSWORD}@postgres:5432/flagship
       FLAGSHIP_JWT_SECRET: ${FLAGSHIP_JWT_SECRET:?set FLAGSHIP_JWT_SECRET for local compose}
+      OTEL_EXPORTER_OTLP_TRACES_ENDPOINT: http://otel-collector:4318/v1/traces
     ports: ["8000:8000"]
     depends_on:
       migrate:
@@ -35,6 +36,32 @@ services:
     read_only: true
     tmpfs: [/tmp]
     volumes: [evidence_data:/app/work/evidence]
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: ["ALL"]
+
+  worker:
+    profiles: ["messaging"]
+    build: .
+    entrypoint: ["flagship-worker"]
+    environment:
+      FLAGSHIP_DATABASE_URL: postgresql+psycopg://flagship:${POSTGRES_PASSWORD}@postgres:5432/flagship
+      FLAGSHIP_KAFKA_BOOTSTRAP_SERVERS: ${FLAGSHIP_KAFKA_BOOTSTRAP_SERVERS:?set broker endpoints}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      otel-collector:
+        condition: service_started
+    read_only: true
+    tmpfs: [/tmp]
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: ["ALL"]
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.142.0
+    command: ["--config=/etc/otelcol/config.yaml"]
+    volumes: ["./deploy/otel-collector.yaml:/etc/otelcol/config.yaml:ro"]
+    ports: ["4318:4318", "13133:13133"]
+    read_only: true
     security_opt: ["no-new-privileges:true"]
     cap_drop: ["ALL"]
 

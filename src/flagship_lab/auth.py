@@ -49,11 +49,15 @@ class OIDCJWKSTokenVerifier:
         tenant = claims.get("tenant_id", "")
         if not tenant or len(tenant) > 64 or not tenant.replace("_", "").replace("-", "").isalnum():
             raise jwt.InvalidTokenError("token contains invalid tenant_id")
+        scopes = claims.get("resource_scopes")
+        if not isinstance(scopes, list) or not scopes or not all(isinstance(scope, str) for scope in scopes):
+            raise jwt.InvalidTokenError("token contains invalid resource_scopes")
         return claims
 
 
 def issue_token(
-    subject: str, roles: list[str], secret: str, ttl_minutes: int = 60, tenant_id: str = "default"
+    subject: str, roles: list[str], secret: str, ttl_minutes: int = 60, tenant_id: str = "default",
+    resource_scopes: list[str] | None = None,
 ) -> str:
     if not tenant_id or len(tenant_id) > 64 or not tenant_id.replace("_", "").replace("-", "").isalnum():
         raise ValueError("tenant_id must use 1-64 letters, digits, underscores or hyphens")
@@ -61,10 +65,14 @@ def issue_token(
     if unknown:
         raise ValueError(f"unknown roles: {sorted(unknown)}")
     now = datetime.now(timezone.utc)
+    scopes = resource_scopes if resource_scopes is not None else ["*:*:*"]
+    if not scopes or not all(isinstance(scope, str) and 3 <= len(scope) <= 300 for scope in scopes):
+        raise ValueError("resource_scopes must contain valid scope strings")
     payload = {
         "sub": subject,
         "tenant_id": tenant_id,
         "roles": sorted(set(roles)),
+        "resource_scopes": sorted(set(scopes)),
         "iat": now,
         "exp": now + timedelta(minutes=ttl_minutes),
         "aud": "flagship-lab",

@@ -6,7 +6,8 @@ RUN addgroup --system flagship && adduser --system --ingroup flagship --home /ap
 COPY pyproject.toml alembic.ini ./
 COPY migrations ./migrations
 COPY src ./src
-RUN python -m pip install --upgrade pip && python -m pip install .
+ARG FLAGSHIP_EXTRAS="kafka"
+RUN python -m pip install --upgrade pip && python -m pip install ".[${FLAGSHIP_EXTRAS}]"
 RUN mkdir -p /app/work && chown -R flagship:flagship /app
 USER flagship
 EXPOSE 8000

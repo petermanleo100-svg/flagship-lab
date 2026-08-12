@@ -36,7 +36,7 @@ class RiskGraphService:
         self.tenant_id = tenant_id
 
     def add_entities(self, entities: list[Entity]) -> None:
-        with self.db.connect() as conn:
+        with self.db.connect(self.tenant_id) as conn:
             values = [{"tenant_id": self.tenant_id, "entity_id": item.entity_id,
                        "entity_type": item.entity_type, "attributes_json": canonical_json(item.attributes)} for item in entities]
             if values:
@@ -49,7 +49,7 @@ class RiskGraphService:
             append_audit_event(conn, "riskgraph", "ENTITIES_UPSERTED", "batch", {"count": len(entities)}, self.tenant_id)
 
     def add_edges(self, edges: list[Edge]) -> None:
-        with self.db.connect() as conn:
+        with self.db.connect(self.tenant_id) as conn:
             if edges:
                 conn.execute(insert(GraphEdge), [{
                     "tenant_id": self.tenant_id, "source_id": item.source_id, "target_id": item.target_id,
@@ -59,7 +59,7 @@ class RiskGraphService:
             append_audit_event(conn, "riskgraph", "EDGES_ADDED", "batch", {"count": len(edges)}, self.tenant_id)
 
     def investigate(self) -> list[dict]:
-        with self.db.connect() as conn:
+        with self.db.connect(self.tenant_id) as conn:
             entities = {row["entity_id"]: dict(row) for row in conn.execute(
                 select(GraphEntity).where(GraphEntity.tenant_id == self.tenant_id)).mappings()}
             edges = [dict(row) for row in conn.execute(

@@ -5,6 +5,7 @@ import hmac
 import json
 import zipfile
 import base64
+import io
 from pathlib import Path
 
 from sqlalchemy import select
@@ -14,6 +15,7 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey,
 
 from .core import canonical_json, sha256_json, utc_now
 from .sql_models import AuditEvent, TaxFinding, TaxRuleRun, TaxRunWorkflow
+from .signing import Ed25519Signer, EvidenceSigner
 
 
 def _bytes(value: object) -> bytes:
@@ -49,13 +51,42 @@ def export_tax_run(conn: Connection, run_id: str, output: str | Path, signing_se
     elif signing_secret is not None:
         value = hmac.new(signing_secret.encode(), canonical_json(manifest).encode(), hashlib.sha256).hexdigest()
         manifest["signature"] = {"algorithm": "HMAC-SHA256", "key_id": key_id, "value": value}
+    package = _build_zip(payloads, manifest)
     destination = Path(output)
     destination.parent.mkdir(parents=True, exist_ok=True)
-    with zipfile.ZipFile(destination, "w", compression=zipfile.ZIP_DEFLATED) as archive:
+    destination.write_bytes(package)
+    return manifest
+
+
+def build_tax_run_package(conn: Connection, run_id: str, tenant_id: str, signer: EvidenceSigner) -> tuple[bytes, dict]:
+    run = conn.execute(select(TaxRuleRun).where(
+        TaxRuleRun.run_id == run_id, TaxRuleRun.tenant_id == tenant_id)).mappings().one_or_none()
+    if run is None:
+        raise ValueError("unknown run_id")
+    findings = [dict(row) for row in conn.execute(select(TaxFinding).where(
+        TaxFinding.run_id == run_id, TaxFinding.tenant_id == tenant_id).order_by(TaxFinding.id)).mappings()]
+    audit = [dict(row) for row in conn.execute(select(AuditEvent).where(
+        AuditEvent.tenant_id == tenant_id).order_by(AuditEvent.id)).mappings()]
+    workflow = conn.execute(select(TaxRunWorkflow).where(
+        TaxRunWorkflow.run_id == run_id, TaxRunWorkflow.tenant_id == tenant_id)).mappings().one_or_none()
+    payloads = {"run.json": _bytes(dict(run)), "findings.json": _bytes(findings),
+                "audit_events.json": _bytes(audit), "review.json": _bytes(dict(workflow) if workflow else None)}
+    manifest = {"format": "flagship-evidence/v2", "module": "taxflow", "tenant_id": tenant_id,
+                "entity_id": run_id, "created_at": utc_now(),
+                "files": {name: hashlib.sha256(data).hexdigest() for name, data in payloads.items()}}
+    manifest["manifest_hash"] = sha256_json(manifest)
+    signature = signer.sign(canonical_json(manifest).encode())
+    manifest["signature"] = {"algorithm": signature.algorithm, "key_id": signature.key_id, "value": signature.value}
+    return _build_zip(payloads, manifest), manifest
+
+
+def _build_zip(payloads: dict[str, bytes], manifest: dict) -> bytes:
+    output = io.BytesIO()
+    with zipfile.ZipFile(output, "w", compression=zipfile.ZIP_DEFLATED) as archive:
         for name, data in payloads.items():
             archive.writestr(name, data)
         archive.writestr("manifest.json", _bytes(manifest))
-    return manifest
+    return output.getvalue()
 
 
 def verify_evidence_package(path: str | Path, signing_secret: str | None = None,
