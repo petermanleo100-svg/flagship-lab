@@ -93,6 +93,15 @@ CREATE TABLE IF NOT EXISTS tax_findings (
     evidence_json TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS tax_run_workflow (
+    run_id TEXT PRIMARY KEY REFERENCES tax_rule_runs(run_id),
+    requested_by TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'PENDING_REVIEW',
+    reviewed_by TEXT,
+    reviewed_at TEXT,
+    decision_comment TEXT
+);
+
 CREATE TABLE IF NOT EXISTS regulation_documents (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     document_key TEXT NOT NULL,
@@ -127,6 +136,17 @@ CREATE TABLE IF NOT EXISTS control_cases (
     evidence_hash TEXT NOT NULL,
     status TEXT NOT NULL DEFAULT 'OPEN'
 );
+
+CREATE TABLE IF NOT EXISTS control_case_transitions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    case_id INTEGER NOT NULL REFERENCES control_cases(id),
+    from_status TEXT NOT NULL,
+    to_status TEXT NOT NULL,
+    actor TEXT NOT NULL,
+    reason TEXT NOT NULL,
+    occurred_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_control_case_transition ON control_case_transitions(case_id, id);
 
 CREATE TABLE IF NOT EXISTS graph_entities (
     entity_id TEXT PRIMARY KEY,
@@ -196,4 +216,3 @@ def verify_audit_chain(conn: sqlite3.Connection) -> tuple[bool, int, str | None]
         previous_hash = row["event_hash"]
         count += 1
     return True, count, None
-

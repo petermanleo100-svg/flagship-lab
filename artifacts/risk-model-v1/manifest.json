@@ -11,8 +11,8 @@
       "reproducible": true
     },
     "riskgraph-model-card.json": {
-      "bytes": 1426,
-      "sha256": "aebd45cd766481da265c34cd2d14c12028444e593726d9f15b9c7458bac46a75"
+      "bytes": 2477,
+      "sha256": "ca616ec55e4c1518cd8041d5d6a8769aa7a13a7547540e01569c9664b8d4052d"
     }
   },
   "warning": "All training and test data are synthetic. Metrics are not evidence of real-world fraud detection performance."

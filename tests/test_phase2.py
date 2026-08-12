@@ -49,7 +49,10 @@ def test_rule_pack_validation_rejects_duplicate_codes():
 
 
 def test_fastapi_rbac_and_openapi(client: TestClient):
-    assert client.get("/health").status_code == 200
+    health = client.get("/health", headers={"X-Request-ID": "phase3-trace-test"})
+    assert health.status_code == 200
+    assert health.headers["x-request-id"] == "phase3-trace-test"
+    assert health.headers["server-timing"].startswith("app;dur=")
     schema = client.get("/openapi.json").json()
     assert "/tax/runs" in schema["paths"]
     assert client.post("/tax/runs", json={}).status_code == 401
@@ -75,11 +78,24 @@ def test_end_to_end_tax_run_and_verified_evidence(client: TestClient, tmp_path):
     assert {item["rule_code"] for item in findings.json()} == {"TAX_ID_REQUIRED", "VAT_RECALC"}
     denied = client.get(f"/evidence/tax/{run_id}", headers=auth_header(analyst))
     assert denied.status_code == 403
+    pending = client.get(f"/evidence/tax/{run_id}", headers=auth_header(reviewer))
+    assert pending.status_code == 409
+    review = client.post(
+        f"/tax/runs/{run_id}/review",
+        json={"decision": "APPROVE", "comment": "规则运行证据与发现抽样复核通过"},
+        headers=auth_header(reviewer),
+    )
+    assert review.status_code == 200
+    assert review.json()["status"] == "APPROVED"
     evidence = client.get(f"/evidence/tax/{run_id}", headers=auth_header(reviewer))
     assert evidence.status_code == 200
     package = tmp_path / "evidence.zip"
     package.write_bytes(evidence.content)
-    assert verify_evidence_package(package) == (True, [])
+    assert verify_evidence_package(package, SECRET, require_signature=True) == (True, [])
+    assert verify_evidence_package(package, "wrong-secret", require_signature=True)[1] == ["signature_mismatch"]
+    with zipfile.ZipFile(package) as archive:
+        review_payload = json.loads(archive.read("review.json"))
+    assert review_payload["reviewed_by"] == "test-reviewer"
 
     tampered = tmp_path / "tampered.zip"
     with zipfile.ZipFile(io.BytesIO(evidence.content)) as source, zipfile.ZipFile(tampered, "w") as target:
@@ -93,6 +109,37 @@ def test_end_to_end_tax_run_and_verified_evidence(client: TestClient, tmp_path):
     assert "hash_mismatch:findings.json" in errors
 
 
+def test_control_case_lifecycle_and_four_eyes_api(client: TestClient):
+    analyst = token(client, "analyst")
+    reviewer = token(client, "reviewer")
+    event = {
+        "event_id": "LIFE-1",
+        "event_type": "DEPLOYMENT",
+        "actor": "release-owner",
+        "resource": "production",
+        "occurred_at": "2026-08-11T23:00:00+08:00",
+        "approved": False,
+        "privileged": True,
+        "outcome": "SUCCESS",
+        "payload": {},
+    }
+    assert client.post("/controls/events", json=event, headers=auth_header(analyst)).status_code == 201
+    cases = client.get("/controls/cases", headers=auth_header(reviewer)).json()
+    case_id = cases[0]["id"]
+    for status, reason in [
+        ("IN_REVIEW", "已分派控制责任人与调查范围"),
+        ("REMEDIATED", "已补充审批记录并完成补偿性控制"),
+        ("CLOSED", "独立复核证据后确认整改关闭"),
+    ]:
+        response = client.post(
+            f"/controls/cases/{case_id}/transition",
+            json={"to_status": status, "reason": reason},
+            headers=auth_header(reviewer),
+        )
+        assert response.status_code == 200
+    history = client.get(f"/controls/cases/{case_id}/history", headers=auth_header(reviewer)).json()
+    assert [item["to_status"] for item in history] == ["IN_REVIEW", "REMEDIATED", "CLOSED"]
+
+
 def test_expired_or_malformed_token_is_unauthorized(client: TestClient):
     assert client.get("/audit/verify", headers=auth_header("not-a-jwt")).status_code == 401
-

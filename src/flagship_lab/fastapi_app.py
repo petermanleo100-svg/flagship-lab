@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 from pathlib import Path
+from time import perf_counter
 from typing import Any
+from uuid import uuid4
 
-from fastapi import Depends, FastAPI, HTTPException
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
@@ -38,6 +40,11 @@ class RuleRunRequest(BaseModel):
     rule_pack: dict[str, Any] | None = None
 
 
+class ReviewDecisionIn(BaseModel):
+    decision: str = Field(pattern="^(APPROVE|REJECT)$")
+    comment: str = Field(min_length=3, max_length=500)
+
+
 class RegulationDocumentIn(BaseModel):
     document_key: str
     title: str
@@ -62,6 +69,11 @@ class ControlEventIn(BaseModel):
     payload: dict[str, Any] = Field(default_factory=dict)
 
 
+class ControlTransitionIn(BaseModel):
+    to_status: str = Field(pattern="^(OPEN|IN_REVIEW|REMEDIATED|CLOSED)$")
+    reason: str = Field(min_length=3, max_length=500)
+
+
 class EntityIn(BaseModel):
     entity_id: str
     entity_type: str
@@ -77,9 +89,17 @@ class EdgeIn(BaseModel):
     evidence: dict[str, Any] = Field(default_factory=dict)
 
 
-def create_app(db_path: str, jwt_secret: str, allow_dev_tokens: bool = False) -> FastAPI:
+def create_app(
+    db_path: str,
+    jwt_secret: str,
+    allow_dev_tokens: bool = False,
+    evidence_signing_secret: str | None = None,
+) -> FastAPI:
     if len(jwt_secret) < 32:
         raise ValueError("jwt_secret must contain at least 32 characters")
+    signing_secret = evidence_signing_secret or jwt_secret
+    if len(signing_secret) < 32:
+        raise ValueError("evidence_signing_secret must contain at least 32 characters")
     db = Database(db_path)
     db.initialize()
     tax = TaxFlowService(db)
@@ -94,13 +114,22 @@ def create_app(db_path: str, jwt_secret: str, allow_dev_tokens: bool = False) ->
 
     app = FastAPI(
         title="Flagship Lab API",
-        version="0.2.0",
+        version="0.3.0",
         description="Auditable tax technology, regulatory intelligence, IT controls, and graph risk API.",
     )
 
+    @app.middleware("http")
+    async def request_trace(request: Request, call_next):
+        request_id = request.headers.get("X-Request-ID") or uuid4().hex
+        started = perf_counter()
+        response = await call_next(request)
+        response.headers["X-Request-ID"] = request_id
+        response.headers["Server-Timing"] = f"app;dur={(perf_counter() - started) * 1000:.2f}"
+        return response
+
     @app.get("/health")
     def health():
-        return {"status": "ok", "version": "0.2.0", "modules": ["taxflow", "regintel", "controlpulse", "riskgraph"]}
+        return {"status": "ok", "version": "0.3.0", "modules": ["taxflow", "regintel", "controlpulse", "riskgraph"]}
 
     @app.post("/auth/dev-token")
     def dev_token(request: TokenRequest):
@@ -117,7 +146,15 @@ def create_app(db_path: str, jwt_secret: str, allow_dev_tokens: bool = False) ->
     def run_tax(request: RuleRunRequest, claims: dict = Depends(can_analyze)):
         result = tax.run_rules(request.rule_version, request.rule_pack)
         result["actor"] = claims["sub"]
+        result["workflow"] = tax.request_review(result["run_id"], claims["sub"])
         return result
+
+    @app.post("/tax/runs/{run_id}/review")
+    def review_tax_run(run_id: str, request: ReviewDecisionIn, claims: dict = Depends(can_review)):
+        try:
+            return tax.review_run(run_id, claims["sub"], request.decision, request.comment)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc))
 
     @app.get("/tax/findings")
     def tax_findings(run_id: str, claims: dict = Depends(can_view)):
@@ -127,8 +164,11 @@ def create_app(db_path: str, jwt_secret: str, allow_dev_tokens: bool = False) ->
     def tax_evidence(run_id: str, claims: dict = Depends(can_review)):
         output = Path(db.path).parent / "evidence" / f"tax-{run_id}.zip"
         try:
+            workflow = tax.workflow(run_id)
+            if workflow is None or workflow["status"] != "APPROVED":
+                raise HTTPException(status_code=409, detail="tax run requires independent approval")
             with db.connect() as conn:
-                export_tax_run(conn, run_id, output)
+                export_tax_run(conn, run_id, output, signing_secret=signing_secret, key_id="flagship-api-hmac-v1")
         except ValueError as exc:
             raise HTTPException(status_code=404, detail=str(exc))
         return FileResponse(output, media_type="application/zip", filename=output.name)
@@ -148,6 +188,19 @@ def create_app(db_path: str, jwt_secret: str, allow_dev_tokens: bool = False) ->
     @app.get("/controls/cases")
     def control_cases(claims: dict = Depends(can_review)):
         return controls.open_cases()
+
+    @app.post("/controls/cases/{case_id}/transition")
+    def transition_control_case(
+        case_id: int, request: ControlTransitionIn, claims: dict = Depends(can_review)
+    ):
+        try:
+            return controls.transition_case(case_id, claims["sub"], request.to_status, request.reason)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc))
+
+    @app.get("/controls/cases/{case_id}/history")
+    def control_case_history(case_id: int, claims: dict = Depends(can_review)):
+        return controls.case_history(case_id)
 
     @app.post("/graph/entities", status_code=201)
     def add_entities(items: list[EntityIn], claims: dict = Depends(can_analyze)):
@@ -171,7 +224,10 @@ def create_app(db_path: str, jwt_secret: str, allow_dev_tokens: bool = False) ->
 
     @app.get("/admin/config-check")
     def config_check(claims: dict = Depends(admin_only)):
-        return {"jwt_secret_configured": True, "development_tokens_enabled": allow_dev_tokens}
+        return {
+            "jwt_secret_configured": True,
+            "evidence_signing_key_separated": evidence_signing_secret is not None and signing_secret != jwt_secret,
+            "development_tokens_enabled": allow_dev_tokens,
+        }
 
     return app
-

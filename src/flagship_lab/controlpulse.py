@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass
 from datetime import datetime
 
-from .core import Database, append_audit_event, canonical_json, sha256_json
+from .core import Database, append_audit_event, canonical_json, sha256_json, utc_now
 
 
 @dataclass(frozen=True)
@@ -70,4 +70,54 @@ class ControlPulseService:
 
     def open_cases(self) -> list[dict]:
         with self.db.connect() as conn:
-            return [dict(row) for row in conn.execute("SELECT * FROM control_cases WHERE status='OPEN' ORDER BY id")]
+            return [dict(row) for row in conn.execute("SELECT * FROM control_cases WHERE status!='CLOSED' ORDER BY id")]
+
+    def transition_case(self, case_id: int, actor: str, to_status: str, reason: str) -> dict:
+        allowed = {
+            "OPEN": {"IN_REVIEW"},
+            "IN_REVIEW": {"REMEDIATED"},
+            "REMEDIATED": {"CLOSED"},
+            "CLOSED": {"OPEN"},
+        }
+        target = to_status.upper()
+        if not reason.strip():
+            raise ValueError("transition reason is required")
+        with self.db.connect() as conn:
+            row = conn.execute(
+                """SELECT c.*, e.actor AS event_actor
+                   FROM control_cases c JOIN control_events e ON e.event_id=c.event_id
+                   WHERE c.id=?""",
+                (case_id,),
+            ).fetchone()
+            if row is None:
+                raise ValueError("unknown case_id")
+            current = row["status"]
+            if target not in allowed.get(current, set()):
+                raise ValueError(f"invalid transition {current}->{target}")
+            if target == "CLOSED" and actor == row["event_actor"]:
+                raise ValueError("four-eyes control requires an independent closer")
+            occurred_at = utc_now()
+            conn.execute("UPDATE control_cases SET status=? WHERE id=?", (target, case_id))
+            conn.execute(
+                """INSERT INTO control_case_transitions
+                   (case_id,from_status,to_status,actor,reason,occurred_at)
+                   VALUES (?,?,?,?,?,?)""",
+                (case_id, current, target, actor, reason, occurred_at),
+            )
+            append_audit_event(
+                conn,
+                "controlpulse",
+                "CASE_TRANSITIONED",
+                str(case_id),
+                {"from": current, "to": target, "actor": actor, "reason": reason},
+            )
+            return {"case_id": case_id, "from_status": current, "to_status": target, "actor": actor}
+
+    def case_history(self, case_id: int) -> list[dict]:
+        with self.db.connect() as conn:
+            return [
+                dict(row)
+                for row in conn.execute(
+                    "SELECT * FROM control_case_transitions WHERE case_id=? ORDER BY id", (case_id,)
+                )
+            ]

@@ -5,7 +5,7 @@ from flagship_lab.core import Database
 from flagship_lab.event_stream import ControlStreamProcessor, JsonlEventStream
 from flagship_lab.regintel import RegIntelService
 from flagship_lab.regintel_eval import DEMO_CASES, load_demo_corpus
-from flagship_lab.risk_model import generate_temporal_graph_dataset, train_temporal_baseline
+from flagship_lab.risk_model import generate_temporal_graph_dataset, train_temporal_baseline, validate_entity_holdout
 
 
 def test_regintel_hybrid_evaluation_is_reproducible(tmp_path):
@@ -29,6 +29,17 @@ def test_risk_model_uses_strict_time_split_and_reports_limitations():
     assert 0 <= metrics["recall_at_top_5_percent"] <= 1
     assert len(metrics["feature_importance"]) == 8
     assert metrics["limitations"]
+
+
+def test_risk_model_entity_holdout_has_zero_entity_leakage_and_drift_report():
+    dataset = generate_temporal_graph_dataset(entities=120, months=8, seed=42)
+    report = validate_entity_holdout(dataset, train_through_month=5, holdout_fraction=0.25, seed=42)
+    assert report["entity_leakage_count"] == 0
+    assert report["train_entities"] > report["test_entities"] > 0
+    assert 0 <= report["average_precision"] <= 1
+    assert 0 <= report["roc_auc"] <= 1
+    assert len(report["feature_drift_psi"]) == 8
+    assert all(item["psi"] >= 0 for item in report["feature_drift_psi"])
 
 
 def test_control_stream_checkpoint_replay_and_idempotency(tmp_path):
@@ -65,4 +76,3 @@ def test_control_stream_detects_tampering(tmp_path):
     assert not valid
     assert count == 0
     assert broken
-

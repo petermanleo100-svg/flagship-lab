@@ -30,6 +30,7 @@ class TemporalDataset:
     x: np.ndarray
     y: np.ndarray
     months: np.ndarray
+    entity_ids: np.ndarray
     feature_names: list[str]
 
 
@@ -43,6 +44,7 @@ def generate_temporal_graph_dataset(entities: int = 400, months: int = 12, seed:
     rows: list[list[float]] = []
     labels: list[int] = []
     time_values: list[int] = []
+    entity_values: list[str] = []
     for month in range(1, months + 1):
         graph = nx.DiGraph()
         graph.add_nodes_from(nodes)
@@ -86,7 +88,86 @@ def generate_temporal_graph_dataset(entities: int = 400, months: int = 12, seed:
             label_noise = rng.random() < 0.008
             labels.append(int(risky) ^ int(label_noise))
             time_values.append(month)
-    return TemporalDataset(np.asarray(rows), np.asarray(labels), np.asarray(time_values), FEATURES.copy())
+            entity_values.append(node)
+    return TemporalDataset(
+        np.asarray(rows), np.asarray(labels), np.asarray(time_values), np.asarray(entity_values), FEATURES.copy()
+    )
+
+
+def _population_stability_index(train: np.ndarray, test: np.ndarray, buckets: int = 10) -> float:
+    edges = np.unique(np.quantile(train, np.linspace(0, 1, buckets + 1)))
+    if len(edges) < 3:
+        return 0.0
+    edges[0], edges[-1] = -np.inf, np.inf
+    train_share = np.histogram(train, bins=edges)[0].astype(float)
+    test_share = np.histogram(test, bins=edges)[0].astype(float)
+    train_share = np.clip(train_share / max(train_share.sum(), 1), 1e-6, None)
+    test_share = np.clip(test_share / max(test_share.sum(), 1), 1e-6, None)
+    return float(np.sum((test_share - train_share) * np.log(test_share / train_share)))
+
+
+def validate_entity_holdout(
+    dataset: TemporalDataset,
+    train_through_month: int = 8,
+    holdout_fraction: float = 0.25,
+    seed: int = 20260811,
+) -> dict:
+    if not 0.1 <= holdout_fraction <= 0.5:
+        raise ValueError("holdout_fraction must be between 0.1 and 0.5")
+    rng = random.Random(seed)
+    labels_by_entity = {
+        entity: int(dataset.y[dataset.entity_ids == entity].max()) for entity in np.unique(dataset.entity_ids)
+    }
+    risky = sorted(entity for entity, label in labels_by_entity.items() if label)
+    normal = sorted(entity for entity, label in labels_by_entity.items() if not label)
+    rng.shuffle(risky)
+    rng.shuffle(normal)
+    holdout = set(risky[: max(1, math.ceil(len(risky) * holdout_fraction))])
+    holdout.update(normal[: max(1, math.ceil(len(normal) * holdout_fraction))])
+    is_holdout = np.isin(dataset.entity_ids, list(holdout))
+    train_mask = (dataset.months <= train_through_month) & ~is_holdout
+    test_mask = (dataset.months > train_through_month) & is_holdout
+    if len(np.unique(dataset.y[train_mask])) < 2 or len(np.unique(dataset.y[test_mask])) < 2:
+        raise ValueError("entity holdout requires both classes in train and test")
+    model = RandomForestClassifier(
+        n_estimators=180,
+        max_depth=8,
+        min_samples_leaf=4,
+        class_weight="balanced_subsample",
+        random_state=seed,
+        n_jobs=1,
+    )
+    model.fit(dataset.x[train_mask], dataset.y[train_mask])
+    probabilities = model.predict_proba(dataset.x[test_mask])[:, 1]
+    y_test = dataset.y[test_mask]
+    train_entities = set(dataset.entity_ids[train_mask])
+    test_entities = set(dataset.entity_ids[test_mask])
+    drift = [
+        {
+            "feature": feature,
+            "psi": round(_population_stability_index(dataset.x[train_mask, idx], dataset.x[test_mask, idx]), 6),
+        }
+        for idx, feature in enumerate(dataset.feature_names)
+    ]
+    drift.sort(key=lambda item: -item["psi"])
+    return {
+        "protocol": "entity-disjoint temporal holdout/v1",
+        "seed": seed,
+        "holdout_fraction": holdout_fraction,
+        "train_rows": int(train_mask.sum()),
+        "test_rows": int(test_mask.sum()),
+        "train_entities": len(train_entities),
+        "test_entities": len(test_entities),
+        "entity_leakage_count": len(train_entities & test_entities),
+        "average_precision": round(float(average_precision_score(y_test, probabilities)), 6),
+        "roc_auc": round(float(roc_auc_score(y_test, probabilities)), 6),
+        "feature_drift_psi": drift,
+        "high_drift_features": [item["feature"] for item in drift if item["psi"] >= 0.25],
+        "limitations": [
+            "实体隔离降低了同一主体跨月份泄漏，但数据仍为固定种子生成的合成图。",
+            "PSI仅用于数据分布监测，不证明因果关系或真实业务稳定性。",
+        ],
+    }
 
 
 def train_temporal_baseline(
@@ -150,4 +231,3 @@ def save_model_artifacts(model: RandomForestClassifier, metrics: dict, output_di
     joblib.dump(model, model_path)
     card_path.write_text(json.dumps(metrics, ensure_ascii=False, indent=2), encoding="utf-8")
     return {"model": str(model_path), "model_card": str(card_path)}
-

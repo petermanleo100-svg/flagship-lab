@@ -1,4 +1,4 @@
-# Phase 2架构
+# Phase 3架构
 
 ## 边界
 
@@ -32,6 +32,10 @@ SQLite + append-only hash-chained audit_events
 - RegIntel融合词项检索与字符TF-IDF余弦相似度，并提供Recall@K/MRR评测器。
 - RiskGraph使用NetworkX生成图特征，按月份严格划分训练/测试并输出模型卡。
 - ControlPulse提供带偏移量和哈希链的JSONL事件流、原子检查点、幂等消费及回放。
+- TaxFlow运行工作流强制发起人与复核人分离；只有`APPROVED`运行可以导出签名证据。
+- 证据清单在逐文件SHA-256和清单哈希之外增加HMAC-SHA256认证，并保留可轮换`key_id`。
+- ControlPulse缺陷状态机拒绝非法跳转与责任人自关闭，转换历史同时进入审计哈希链。
+- RiskGraph除时间外留出外，增加实体隔离留出和逐特征PSI漂移报告，避免同一实体跨集合泄漏。
 
 ## 后续拆分方向
 
@@ -39,5 +43,5 @@ SQLite + append-only hash-chained audit_events
 2. `RuleEnginePort`：TaxFlow JSON DSL已实现；继续增加YAML加载和ControlPulse OPA/Rego。
 3. `EvidenceStorePort`：本地ZIP与哈希清单已实现；继续增加MinIO和非对称签名。
 4. `SearchPort`：当前词项+字符TF-IDF升级为BM25 + embedding + reranker。
-5. `GraphPort`：当前NetworkX时间图特征升级为Neo4j，并增加实体隔离测试与SHAP解释。
-6. FastAPI/OpenAPI与JWT/RBAC已实现；继续增加异步任务、React管理端及OpenTelemetry。
+5. `GraphPort`：当前NetworkX时间图特征升级为Neo4j，并增加SHAP解释和对抗漂移测试。
+6. FastAPI/OpenAPI、JWT/RBAC与请求关联头已实现；继续增加异步任务、指标导出及OpenTelemetry。

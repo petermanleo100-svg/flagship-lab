@@ -14,7 +14,12 @@ from .taxflow import TaxFlowService, generate_transactions
 from .server import serve
 from .event_stream import ControlStreamProcessor, JsonlEventStream
 from .regintel_eval import DEMO_CASES, load_demo_corpus
-from .risk_model import generate_temporal_graph_dataset, save_model_artifacts, train_temporal_baseline
+from .risk_model import (
+    generate_temporal_graph_dataset,
+    save_model_artifacts,
+    train_temporal_baseline,
+    validate_entity_holdout,
+)
 
 
 def demo(db_path: str) -> dict:
@@ -118,7 +123,12 @@ def main() -> None:
         secret = os.environ.get("FLAGSHIP_JWT_SECRET")
         if not secret:
             raise SystemExit("FLAGSHIP_JWT_SECRET is required and must contain at least 32 characters")
-        uvicorn.run(create_app(args.db, secret, args.allow_dev_tokens), host=args.host, port=args.port)
+        signing_secret = os.environ.get("FLAGSHIP_EVIDENCE_SIGNING_SECRET")
+        uvicorn.run(
+            create_app(args.db, secret, args.allow_dev_tokens, signing_secret),
+            host=args.host,
+            port=args.port,
+        )
         return
     if args.command == "reg-eval":
         db = Database(args.db)
@@ -130,6 +140,7 @@ def main() -> None:
     if args.command == "risk-benchmark":
         dataset = generate_temporal_graph_dataset(args.entities, args.months)
         model, metrics = train_temporal_baseline(dataset, args.train_through)
+        metrics["entity_holdout_validation"] = validate_entity_holdout(dataset, args.train_through)
         metrics["artifacts"] = save_model_artifacts(model, metrics, args.output_dir)
         print(json.dumps(metrics, ensure_ascii=False, indent=2))
         return
