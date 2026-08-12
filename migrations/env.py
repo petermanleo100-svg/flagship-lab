@@ -14,7 +14,9 @@ if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 database_url = os.environ.get("FLAGSHIP_DATABASE_URL")
 if database_url:
-    config.set_main_option("sqlalchemy.url", database_url)
+    # Alembic stores main options in ConfigParser, where a literal percent sign
+    # starts interpolation. Preserve percent-encoded PostgreSQL query options.
+    config.set_main_option("sqlalchemy.url", database_url.replace("%", "%%"))
 target_metadata = Base.metadata
 
 

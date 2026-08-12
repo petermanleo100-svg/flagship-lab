@@ -14,6 +14,13 @@ def _config(path) -> Config:
     return config
 
 
+def test_alembic_environment_accepts_percent_encoded_database_options(monkeypatch):
+    config = Config()
+    encoded = "postgresql+psycopg://user:pass@db/app?options=-csearch_path%3Drestore_target"
+    config.set_main_option("sqlalchemy.url", encoded.replace("%", "%%"))
+    assert config.get_main_option("sqlalchemy.url") == encoded
+
+
 def test_frozen_migration_chain_builds_runnable_enterprise_schema(tmp_path, monkeypatch):
     monkeypatch.delenv("FLAGSHIP_DATABASE_URL", raising=False)
     path = tmp_path / "migration.db"
