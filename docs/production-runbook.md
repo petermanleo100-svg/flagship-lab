@@ -11,6 +11,8 @@ This runbook describes the verified application controls. Cloud account provisio
 
 For local Compose, set distinct `POSTGRES_OWNER_PASSWORD` and `POSTGRES_APP_PASSWORD` values and use a fresh database volume; role bootstrap runs only on initial database creation. In managed PostgreSQL, the DBA must create equivalent identities and grants. Run `flagship-operations preflight` as the runtime identity and require secret-free `valid: true` output before traffic admission. Compose runs Alembic as the owner, then repeats this preflight before starting the API.
 
+Before approving a release, an administrator must run `GH_TOKEN=$(gh auth token) GITHUB_REPOSITORY=petermanleo100-svg/flagship-lab EXPECTED_REQUIRED_CHECKS=backend,postgres,frontend,container,compose-smoke,analyze python scripts/verify_github_governance.py`. The verifier checks live `main` protection, GitHub-Actions-bound required checks, secret scanning/push protection and Dependabot security controls. It intentionally runs outside Actions because the default workflow token cannot read administration settings; no broad administrator PAT is stored in Actions.
+
 ## Evidence custody
 
 Production uses `S3ObjectLockStore` with bucket versioning and Object Lock enabled in compliance mode. Configure an asymmetric KMS key through `AwsKmsSigner`; do not mount private key material. Verify retention policy and KMS key rotation in the cloud change record before release.

@@ -71,7 +71,7 @@ OIDC 生产变量：
 
 CI 包含 Python 全量测试、PostgreSQL 17 真实服务测试和 React 构建。迁移测试覆盖空库创建以及从 `20260811_0002` 带数据升级。性能数字只允许引用带环境说明的基准报告，不从合成数据推导生产 SLA 或真实风险识别效果。
 
-仓库发布治理包含 Python 与 JavaScript/TypeScript CodeQL、每周依赖更新、安全路径 CODEOWNERS 和逐项发布清单。GitHub 分支保护与人员审批属于仓库设置，必须在生产准入前由所有者启用并留证。
+仓库发布治理包含 Python 与 JavaScript/TypeScript CodeQL、每周依赖更新、安全路径 CODEOWNERS 和逐项发布清单。GitHub `main` 已要求 PR、严格 CI/CodeQL 检查、线性历史和讨论解决，管理员同样受约束，并禁止强推和删除；这些外部设置必须在每次正式发布前重新取证。
 
 CI 还使用 `promtool` 校验版本化告警规则，为构建后的容器生成 SPDX JSON SBOM，并阻断已有修复的 Critical 漏洞；普通 CI 镜像不冒充已发布或已签名的生产镜像。
 

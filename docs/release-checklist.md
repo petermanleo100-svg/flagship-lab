@@ -1,6 +1,7 @@
 # Enterprise pilot release checklist
 
 - [ ] CI backend, PostgreSQL, frontend, container and full Compose smoke jobs pass on the exact release commit.
+- [ ] GitHub `main` protection still enforces strict `backend`, `postgres`, `frontend`, `container`, `compose-smoke` and `analyze` checks for administrators, with force-push and deletion disabled.
 - [ ] `flagship-operations preflight` returns `valid: true` using the exact production runtime identity and secret bindings.
 - [ ] CodeQL passes for Python and JavaScript/TypeScript on the exact release commit.
 - [ ] Dependency update findings are reviewed; critical/high vulnerabilities have no unapproved exception.
