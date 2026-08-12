@@ -106,14 +106,17 @@ jobs:
         if: steps.mode.outputs.publish == 'true'
         run: echo "${{ steps.publish.outputs.digest }} ${{ env.IMAGE_NAME }}:${{ steps.mode.outputs.version }}" > image-digest.txt
 
-      - name: Block fixed critical vulnerabilities
+      - name: Validate time-bounded vulnerability exceptions
+        run: python scripts/verify_vulnerability_exceptions.py
+      - name: Block fixable High and Critical vulnerabilities
         uses: anchore/scan-action@e1165082ffb1fe366ebaf02d8526e7c4989ea9d2
         with:
           sbom: ${{ env.SBOM_NAME }}
           fail-build: true
-          severity-cutoff: critical
+          severity-cutoff: high
           only-fixed: true
           output-format: table
+          config: .grype.yaml
 
       - name: Attest candidate archive provenance
         if: steps.mode.outputs.publish == 'false'
