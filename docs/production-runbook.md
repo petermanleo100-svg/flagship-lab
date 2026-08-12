@@ -48,3 +48,5 @@ The API exports OTLP traces and Prometheus metrics. Deploy `deploy/otel-collecto
 2. Backend, frontend, non-root container and PostgreSQL jobs pass on the release commit.
 3. PostgreSQL concurrent idempotency/audit, RLS attack and clean restore tests pass without skip.
 4. [`capability-evidence-matrix.md`](capability-evidence-matrix.md) contains no claim without executable evidence.
+5. CodeQL passes for Python and JavaScript/TypeScript; dependency and security-sensitive CODEOWNERS reviews are resolved.
+6. Complete [`release-checklist.md`](release-checklist.md) on the exact release commit and attach environment-specific approvals separately.

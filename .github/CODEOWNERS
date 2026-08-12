@@ -1,0 +1,8 @@
+* @petermanleo100-svg
+/.github/ @petermanleo100-svg
+/migrations/ @petermanleo100-svg
+/src/flagship_lab/auth.py @petermanleo100-svg
+/src/flagship_lab/authorization.py @petermanleo100-svg
+/src/flagship_lab/backup.py @petermanleo100-svg
+/src/flagship_lab/evidence_service.py @petermanleo100-svg
+/src/flagship_lab/signing.py @petermanleo100-svg

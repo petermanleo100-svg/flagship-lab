@@ -22,6 +22,7 @@ This file is the release truth source. A capability may be described as **implem
 | Container deployment baseline | Implemented with limitation | non-root image, read-only API filesystem, dropped capabilities, migration gate, PostgreSQL health check | GitHub CI image build and non-root inspection | Cloud orchestration and secret-manager bindings are environment-specific |
 | Enterprise operations workbench | Implemented with limitation | API readiness, tenant dev login, idempotent tax import/run, review, findings, control and audit views | Vite production build | Production OIDC redirect flow, pagination and full case/evidence workflows remain roadmap |
 | Backup and recovery | Implemented with limitation | audited CLI, AES-256-GCM logical backup, immutable retained object, clean-database restore, row-count and audit-chain verification | backup, operations CLI and PostgreSQL clean-restore tests | PostgreSQL WAL/PITR and cross-region replication require deployment infrastructure |
+| Repository security governance | Implemented with limitation | Python/JavaScript CodeQL workflow, weekly dependency updates, security-path CODEOWNERS and release checklist | CodeQL workflow on release commit; CI remains separately required | Branch protection and human approvals must be enabled in GitHub repository settings |
 
 ## Release audit rules
 
