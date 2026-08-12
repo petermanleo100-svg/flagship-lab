@@ -19,7 +19,9 @@ jobs:
       - name: Audit Python dependency vulnerabilities
         run: python scripts/verify_dependency_manifest.py && pip-audit -r requirements-audit.txt
       - name: Validate Prometheus alert rules
-        run: docker run --rm --entrypoint /bin/promtool -v "$PWD/deploy/prometheus:/rules:ro" prom/prometheus:v3.11.3 check rules /rules/flagship-alerts.yml
+        run: |
+          docker run --rm --entrypoint /bin/promtool -v "$PWD/deploy/prometheus:/rules:ro" prom/prometheus:v3.11.3 check rules /rules/flagship-alerts.yml
+          docker run --rm --entrypoint /bin/promtool -v "$PWD/deploy/prometheus:/rules:ro" -w /rules prom/prometheus:v3.11.3 test rules flagship-alerts.test.yml
 
   postgres:
     runs-on: ubuntu-latest

@@ -4,15 +4,15 @@ groups:
       - alert: FlagshipHighErrorRate
         expr: sum(rate(flagship_http_requests_total{status=~"5.."}[5m])) / clamp_min(sum(rate(flagship_http_requests_total[5m])), 0.001) > 0.01
         for: 10m
-        labels: { severity: critical }
-        annotations: { summary: "Flagship API 5xx rate exceeds 1%" }
+        labels: { severity: critical, service: flagship-lab, owner: platform-operations }
+        annotations: { summary: "Flagship API 5xx rate exceeds 1%", runbook_url: "https://github.com/petermanleo100-svg/flagship-lab/blob/main/docs/production-runbook.md" }
       - alert: FlagshipReadinessUnavailable
         expr: probe_success{job="flagship-readiness"} == 0
         for: 2m
-        labels: { severity: critical }
-        annotations: { summary: "Flagship readiness probe is unavailable" }
+        labels: { severity: critical, service: flagship-lab, owner: platform-operations }
+        annotations: { summary: "Flagship readiness probe is unavailable", runbook_url: "https://github.com/petermanleo100-svg/flagship-lab/blob/main/docs/production-runbook.md" }
       - alert: FlagshipP95LatencyBudgetBurn
         expr: histogram_quantile(0.95, sum by (le) (rate(http_server_request_duration_seconds_bucket{service_name="flagship-lab"}[10m]))) > 1
         for: 15m
-        labels: { severity: warning }
-        annotations: { summary: "Flagship p95 latency exceeds one second" }
+        labels: { severity: warning, service: flagship-lab, owner: platform-operations }
+        annotations: { summary: "Flagship p95 latency exceeds one second", runbook_url: "https://github.com/petermanleo100-svg/flagship-lab/blob/main/docs/production-runbook.md" }
