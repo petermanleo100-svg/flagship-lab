@@ -30,6 +30,8 @@ tests:
         values: '0+0x25'
       - series: 'flagship_operation_last_success_timestamp_seconds{operation="backup_create"}'
         values: '0+0x25'
+      - series: 'node_textfile_scrape_error{job="flagship-node-exporter"}'
+        values: '1+0x25'
     alert_rule_test:
       - eval_time: 16m
         alertname: FlagshipHighErrorRate
@@ -51,6 +53,11 @@ tests:
         exp_alerts:
           - exp_labels: {severity: critical, service: flagship-lab, owner: platform-operations, operation: backup_create}
             exp_annotations: {summary: "Flagship scheduled operation failed", runbook_url: "https://github.com/petermanleo100-svg/flagship-lab/blob/main/docs/production-runbook.md"}
+      - eval_time: 21m
+        alertname: FlagshipTextfileCollectorFailed
+        exp_alerts:
+          - exp_labels: {severity: critical, service: flagship-lab, owner: platform-operations, job: flagship-node-exporter}
+            exp_annotations: {summary: "Flagship operation metrics collector cannot read one or more textfiles", runbook_url: "https://github.com/petermanleo100-svg/flagship-lab/blob/main/docs/production-runbook.md"}
       - eval_time: 21m
         alertname: FlagshipBackupStale
         exp_alerts:

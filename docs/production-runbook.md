@@ -31,7 +31,7 @@ flagship-operations backup-restore /retained/backup/store/backup-nightly-2026-08
 
 Success requires `valid: true`, exact per-table counts and valid audit chains for every tenant. Execute a synthetic post-restore transaction before recording the drill as passed. Logical backup complements PostgreSQL WAL/PITR; test both at least quarterly.
 
-Set `FLAGSHIP_TEXTFILE_DIR` to a Node Exporter textfile-collector directory (or equivalent). Every `flagship-operations` command atomically writes a separate bounded-label metric and preserves last-success time after failure. Alert on non-zero exit, `operation_success == 0`, or backup age beyond the 15-minute RPO. Treat an unwritable metrics directory as a deployment failure.
+Set `FLAGSHIP_TEXTFILE_DIR` to a Node Exporter textfile-collector directory (or equivalent). Every `flagship-operations` command atomically writes a separate bounded-label metric and preserves last-success time after failure. Alert on non-zero exit, `operation_success == 0`, `node_textfile_scrape_error == 1`, or backup age beyond the 15-minute RPO. Treat an unwritable or unreadable metrics directory as a deployment failure.
 
 ## Outbox and dead letters
 
