@@ -21,7 +21,7 @@ This file is the release truth source. A capability may be described as **implem
 | Object storage, KMS signatures | Roadmap | none | none | local filesystem + HMAC only |
 | Broker-backed async workers | Roadmap | outbox persistence only | none | no publisher/consumer SLA |
 | OpenTelemetry and SLO alerts | Roadmap | request ID, structured log formatter, metrics and Server-Timing only | observability test | no trace exporter, collector, dashboard or alert rules |
-| Container deployment baseline | Implemented with limitation | non-root image, read-only API filesystem, dropped capabilities, migration gate, PostgreSQL health check | Dockerfile/Compose static review; CI image build pending | orchestration, backup/restore drill and secret manager integration remain deployment work |
+| Container deployment baseline | Implemented with limitation | non-root image, read-only API filesystem, dropped capabilities, migration gate, PostgreSQL health check | GitHub CI image build and non-root inspection | orchestration, backup/restore drill and secret manager integration remain deployment work |
 | Enterprise operations workbench | Implemented with limitation | API readiness, tenant dev login, idempotent tax import/run, review, findings, control and audit views | Vite production build | Production OIDC redirect flow, pagination and full case/evidence workflows remain roadmap |
 
 ## Release audit rules
