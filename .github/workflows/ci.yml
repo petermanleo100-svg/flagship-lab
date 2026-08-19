@@ -8,7 +8,7 @@ jobs:
   backend:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: "3.12"
@@ -43,7 +43,7 @@ jobs:
       FLAGSHIP_TEST_POSTGRES_URL: postgresql+psycopg://flagship:flagship-ci-password@127.0.0.1:5432/flagship
       FLAGSHIP_DATABASE_URL: postgresql+psycopg://flagship:flagship-ci-password@127.0.0.1:5432/flagship
     steps:
-      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
           python-version: "3.12"
@@ -66,7 +66,7 @@ jobs:
       run:
         working-directory: frontend
     steps:
-      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: pnpm/action-setup@fc06bc1257f339d1d5d8b3a19a8cae5388b55320 # v4.4.0
         with:
           version: 10
@@ -81,7 +81,7 @@ jobs:
   container:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - run: docker build --tag flagship-lab:ci .
       - run: docker run --rm --entrypoint python flagship-lab:ci --version | grep -Fx 'Python 3.13.15'
       - run: docker inspect flagship-lab:ci --format '{{.Config.User}}' | grep -Fx flagship
@@ -130,7 +130,7 @@ jobs:
       FLAGSHIP_OIDC_JWKS_URL: https://id.example/jwks
       FLAGSHIP_BACKUP_KEY_BASE64: a2tra2tra2tra2tra2tra2tra2tra2tra2tra2tra2s=
     steps:
-      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - run: docker compose up --build --detach
       - name: Wait for hardened API readiness
         run: |
