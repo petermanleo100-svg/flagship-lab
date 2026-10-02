@@ -7,7 +7,7 @@ dependencies = [
   "fastapi==0.141.1",
   "uvicorn==0.52.1",
   "sqlalchemy==2.0.51",
-  "PyJWT==2.13.0",
+  "PyJWT==2.15.0",
   "numpy==2.5.2",
   "scikit-learn==1.9.0",
   "networkx==3.6.1",
